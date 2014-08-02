@@ -1,3 +1,6 @@
+#!/usr/bin/python
+# -*- coding: latin-1 -*-
+
 # Level Info Editor - Edits NewerSMBW's LevelInfo.bin
 # Version 1.3
 # Copyright (C) 2013-2014 RoadrunnerWMC
@@ -61,7 +64,7 @@ dir_ = 'distrib/' + PackageName
 printv('>> Build directory will be ' + dir_)
 
 # Print some stuff
-print('[[ Freezing Koopuzzle Tileset Generator ]]')
+print('[[ Freezing Level Info Editor ]]')
 print('>> Destination directory: %s' % dir_)
 
 # Add the "build" parameter to the system argument list
@@ -127,7 +130,7 @@ if upxFlag:
         print('>> Compression complete.')
     else:
         print('>> UPX not found, binaries can\'t be compressed.')
-        print('>> In order to build Reggie! with UPX, place the upx.exe file into '
+        print('>> In order to build Level Info Editor with UPX, place the upx.exe file into '
               'a subdirectory named "upx".')
 else:
     print('>> No \'-upx\' flag specified, so UPX compression will not be attempted.')

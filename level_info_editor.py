@@ -1134,8 +1134,8 @@ class MainWindow(QtWidgets.QMainWindow):
 
     def HandleAbout(self):
         """Shows the About dialog"""
-        try: readme = open('readme.txt', 'r').read()
-        except: readme = 'Level Info Editor %s by RoadrunnerWMC\n(No readme.txt found!)\nLicensed under GPL' % version
+        try: readme = open('readme.md', 'r').read()
+        except: readme = 'Level Info Editor %s by RoadrunnerWMC\n(No readme.md found!)\nLicensed under GPL 3' % version
 
         txtedit = QtWidgets.QPlainTextEdit(readme)
         txtedit.setReadOnly(True)
