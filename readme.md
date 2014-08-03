@@ -53,7 +53,7 @@ See the license file in the distribution for information.
 
 ## Changelog
 
-Release 1.3 (August 1, 2014)
+Release 1.3 (August 2, 2014)
  * Added license.txt and license headers to the source files
  * New readme
  * Dropped Python 2 support
