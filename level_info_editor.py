@@ -2,7 +2,7 @@
 # -*- coding: latin-1 -*-
 
 # Level Info Editor - Edits NewerSMBW's LevelInfo.bin
-# Version 1.3
+# Version 1.4
 # Copyright (C) 2013-2014 RoadrunnerWMC
 
 # This file is part of Level Info Editor.
@@ -30,7 +30,7 @@
 ################################################################
 
 
-version = '1.3'
+version = '1.4'
 
 from PyQt5 import QtCore, QtGui, QtWidgets
 import sys

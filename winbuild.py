@@ -2,7 +2,7 @@
 # -*- coding: latin-1 -*-
 
 # Level Info Editor - Edits NewerSMBW's LevelInfo.bin
-# Version 1.3
+# Version 1.4
 # Copyright (C) 2013-2014 RoadrunnerWMC
 
 # This file is part of Level Info Editor.
@@ -25,8 +25,8 @@
 # Builds Level Info Editor to a Windows binary (*.exe)
 # Use the values below to configure the release:
 
-PackageName = 'lie_1.3_win32'
-Version = '1.3' # This must be a valid float in string format
+PackageName = 'lie_1.4_win32'
+Version = '1.4' # This must be a valid float in string format
 
 
 ################################################################

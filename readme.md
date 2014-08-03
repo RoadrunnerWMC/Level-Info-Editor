@@ -1,5 +1,5 @@
 # Level Info Editor
-(1.3)
+(1.4)
 
 ----------------------------------------------------------------
 
@@ -52,6 +52,9 @@ See the license file in the distribution for information.
 ----------------------------------------------------------------
 
 ## Changelog
+
+Release 1.4: (unreleased)
+ * No changes yet
 
 Release 1.3 (August 2, 2014)
  * Added license.txt and license headers to the source files
