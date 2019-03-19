@@ -569,7 +569,7 @@ class LevelInfoViewer(QtWidgets.QWidget):
         item.setData(QtCore.Qt.UserRole, world)
         self.WorldPicker.addItem(item)
         self.WorldPicker.scrollToItem(item)
-        self.WorldPicker.setItemSelected(item, True)
+        item.setSelected(True)
 
         self.UpdateNames()
 
@@ -642,7 +642,7 @@ class LevelInfoViewer(QtWidgets.QWidget):
         w.Levels.append(level)
         self.LevelPicker.addItem(item)
         self.LevelPicker.scrollToItem(item)
-        self.LevelPicker.setItemSelected(item, True)
+        item.setSelected(True)
 
         self.UpdateNames()
 
