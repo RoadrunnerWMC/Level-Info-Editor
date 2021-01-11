@@ -1,5 +1,5 @@
 # Level Info Editor
-(1.4)
+(1.5)
 
 ----------------------------------------------------------------
 
@@ -53,8 +53,11 @@ See the license file in the distribution for information.
 
 ## Changelog
 
-Release 1.4: (unreleased)
- * No changes yet
+Release 1.5: (January 10, 2021)
+ * Fixed issues with modern PyQt versions
+ * Started providing builds for 64-bit Windows, Linux, and macOS
+
+*Note: there was no official release 1.4. The repository code was marked as "1.4" for many years, so I skipped ahead to 1.5 in order to distinguish that release from that.*
 
 Release 1.3 (August 2, 2014)
  * Added license.txt and license headers to the source files

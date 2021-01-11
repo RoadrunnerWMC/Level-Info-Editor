@@ -18,7 +18,7 @@ import PyInstaller.__main__
 
 PROJECT_NAME = 'Level Info Editor'
 FULL_PROJECT_NAME = 'Level Info Editor'
-PROJECT_VERSION = '1.4'
+PROJECT_VERSION = '1.5'
 
 WIN_ICON = None
 MAC_ICON = None
