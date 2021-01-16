@@ -8,7 +8,9 @@ On GitHub: https://github.com/RoadrunnerWMC/Level-Info-Editor
 
 ----------------------------------------------------------------
 
-Level Info Editor is a program which can edit and save copies of LevelInfo.bin from Newer Super Mario Bros. Wii.  
+Level Info Editor is a program which can edit and save copies of LevelInfo.bin from Newer Super Mario Bros. Wii.
+
+**Note:** World names as seen on the HUD and in the file select menu are not loaded from LevelInfo.bin. They are stored in the world map files themselves, and can be edited with Koopatlas. (The "Yoshi's Island" text displayed on a brand-new savefile slot is an exception; for technical reasons, this string is hardcoded.) To fully modify world names, you'll need to edit them in those places, too. [See this page for more details.](https://horizon.miraheze.org/wiki/Editing_World_Names)
 
 ----------------------------------------------------------------
 
