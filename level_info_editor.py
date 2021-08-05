@@ -443,6 +443,7 @@ class LevelInfoViewer(QtWidgets.QWidget):
         # Connect them to handlers
         self.LevelPicker.currentItemChanged.connect(self.HandleLevelSel)
         self.LevelEdit.dataChanged.connect(self.HandleLevelDatChange)
+        self.LevelEdit.navRequest.connect(self.HandleLevelNavRequest)
         self.LABtn.clicked.connect(self.HandleLA)
         self.LRBtn.clicked.connect(self.HandleLR)
 
@@ -628,6 +629,18 @@ class LevelInfoViewer(QtWidgets.QWidget):
     def HandleLevelDatChange(self):
         """Handles the user changing level data"""
         self.UpdateNames()
+
+    def HandleLevelNavRequest(self, isUp, refocusWidget):
+        """Handles the user pressing PgUp or PgDn to switch between levels"""
+        currentRow = self.LevelPicker.currentRow()
+
+        newRow = currentRow + (-1 if isUp else 1)
+        newRow = max(0, newRow)
+        newRow = min(newRow, self.LevelPicker.count() - 1)
+
+        if newRow != currentRow:
+            self.LevelPicker.setCurrentRow(newRow)
+            refocusWidget.setFocus(True)
 
     def HandleLA(self):
         """Handles Add Level button clicks"""
@@ -829,6 +842,7 @@ class WorldOptionsEditor(QtWidgets.QWidget):
 class LevelEditor(QtWidgets.QGroupBox):
     """Widget that allows the user to change level settings"""
     dataChanged = QtCore.pyqtSignal()
+    navRequest = QtCore.pyqtSignal(bool, QtWidgets.QWidget)
     def __init__(self):
         """Initializes the LevelEditor"""
         QtWidgets.QWidget.__init__(self)
@@ -884,6 +898,34 @@ class LevelEditor(QtWidgets.QGroupBox):
         L.addRow('Star Coins Menu:', self.IsLevelEdit)
         L.addRow('World Half:', self.HalfEdit)
         self.setLayout(L)
+
+        # Watch for PageUp/PageDown
+        for leafWidget in [self.NameEdit,
+                           self.FileEdit.WEdit,
+                           self.FileEdit.LEdit,
+                           self.DisplayEdit.WEdit,
+                           self.DisplayEdit.LEdit,
+                           self.NormalExitEdit,
+                           self.SecretExitEdit,
+                           self.IsLevelEdit,
+                           self.HalfEdit]:
+            leafWidget.installEventFilter(self)
+
+
+    def eventFilter(self, obj, event):
+        """Filter events for leaf widgets, looking for PageUp/PageDown"""
+        # Changing the selected level causes the field edit widget to
+        # lose focus, so we pass it in the signal and ask that the
+        # handler function please refocus it after switching levels.
+        if event.type() == QtCore.QEvent.KeyPress:
+            if event.key() == QtCore.Qt.Key_PageUp:
+                self.navRequest.emit(True, obj)
+                return True
+            elif event.key() == QtCore.Qt.Key_PageDown:
+                self.navRequest.emit(False, obj)
+                return True
+
+        return super().eventFilter(obj, event)
 
     def clear(self):
         """Clears all data from the LevelEditor"""
