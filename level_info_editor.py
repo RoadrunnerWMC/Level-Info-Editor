@@ -360,15 +360,6 @@ class LevelInfoFile():
             return bytes(result)
 
 
-def LoadCharcodes():
-    """Loads charcodes.txt"""
-    global CharCodes
-    CharCodes = {}
-    
-
-
-
-
 ########################################################################
 ########################################################################
 ########################################################################
@@ -1202,6 +1193,5 @@ def main():
     """Main startup function"""
     app = QtWidgets.QApplication(sys.argv)
     mainWindow = MainWindow()
-    LoadCharcodes()
     sys.exit(app.exec_())
 main()
