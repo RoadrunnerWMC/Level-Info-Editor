@@ -845,7 +845,7 @@ class LevelEditor(QtWidgets.QGroupBox):
     navRequest = QtCore.pyqtSignal(bool, QtWidgets.QWidget)
     def __init__(self):
         """Initializes the LevelEditor"""
-        QtWidgets.QWidget.__init__(self)
+        QtWidgets.QGroupBox.__init__(self)
         self.setTitle('Level')
         self.level = None
 
@@ -925,7 +925,7 @@ class LevelEditor(QtWidgets.QGroupBox):
                 self.navRequest.emit(False, obj)
                 return True
 
-        return super().eventFilter(obj, event)
+        return super(QtWidgets.QGroupBox, self).eventFilter(obj, event)
 
     def clear(self):
         """Clears all data from the LevelEditor"""
