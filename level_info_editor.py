@@ -33,6 +33,7 @@
 VERSION = '1.6'
 
 from PyQt5 import QtCore, QtGui, QtWidgets
+import struct
 import sys
 
 
@@ -146,59 +147,40 @@ class LevelInfoFile():
 
     def initFromData(self, rawdata):
         """Initialises the LevelInfoFile from raw binary data"""
-        global levelNamesOffset
-
-        # Py2 opens binary files as strings; convert it to bytes
-        if sys.version[0] == '2':
-            new = []
-            for char in rawdata: new.append(ord(char))
-            rawdata = new
-        else:
-            new = []
-            for i in rawdata: new.append(i)
-            rawdata = new
 
         # Check for the file header
-        if rawdata[0] != ord('N'): return
-        if rawdata[1] != ord('W'): return
-        if rawdata[2] != ord('R'): return
-        if rawdata[3] != ord('p'): return
+        if not rawdata.startswith(b'NWRp'):
+            return
 
-        # Load the world data offsets
-        numberOfWorlds = rawdata[7]
-        worldOffs = []
-        for worldNum in range(numberOfWorlds):
-            off = (rawdata[10 + (4*worldNum)] << 8) | rawdata[11 + (4*worldNum)]
-            worldOffs.append(off)
+        magic, num_worlds = struct.unpack_from('>4sI', rawdata, 0)
+        world_offsets = struct.unpack_from(f'>{num_worlds}I', rawdata, 0x08)
 
         # Load the worlds
-        minTextOffset = 0xFFFF
+        min_text_offs = 0xFFFFFFFF
         worlds = []
-        for offset in worldOffs:
-            numberOfLevels = rawdata[offset + 3]
-            worldData = rawdata[offset+4: (offset+4) + (12*numberOfLevels)]
+        LEVEL_ENTRY_STRUCT = struct.Struct('>5BxHI')
+        for world_i, world_offset in enumerate(world_offsets):
+            num_levels, = struct.unpack_from(f'>I', rawdata, world_offset)
 
             # Make a world and add levels/headers to it
             world = WorldInfo()
-            headers = []
-            for levelOff in range(int(len(worldData)/12)):
-                levelData = worldData[levelOff*12:(levelOff*12) + 12]
 
-                # Find the text
-                textOffset = (levelData[10] << 8) | levelData[11]
-                if textOffset < minTextOffset: minTextOffset = textOffset
-                textLength = levelData[4]
-                text = ''
-                for char in rawdata[textOffset:textOffset + textLength]:
-                    char = char + 0x30
-                    if char > 255: char -= 256
-                    text += chr(char)
+            for level_offs in range(world_offset + 4, world_offset + 4 + num_levels * 12, 12):
+                (
+                    file_name_w, file_name_l,
+                    display_name_w, display_name_l,
+                    text_len, flags, text_offs,
+                ) = LEVEL_ENTRY_STRUCT.unpack_from(rawdata, level_offs)
+
+                if text_offs < min_text_offs: min_text_offs = text_offs
+                text_enc = rawdata[text_offs : text_offs + text_len]
+                text = bytes((c + 0x30) & 0xff for c in text_enc).decode('ascii')
 
                 # Add header info or levels
-                if levelData[3] >= 100:
+                if display_name_l >= 100:
                     # It's a world header
-                    world.setWorldNumber(levelData[2])
-                    if levelData[3] == 100:
+                    world.setWorldNumber(display_name_w)
+                    if display_name_l == 100:
                         world.setLeftHalf(True)
                         world.setLeftName(text)
                     else:
@@ -208,15 +190,15 @@ class LevelInfoFile():
                     # It's a real level
                     level = LevelInfo()
                     level.setName(text)
-                    level.setFileNameW(levelData[0] + 1)
-                    level.setFileNameL(levelData[1] + 1)
-                    level.setDisplayNameW(levelData[2])
-                    level.setDisplayNameL(levelData[3])
-                    flags = (levelData[6] << 8) | levelData[7]
+                    level.setFileNameW(file_name_w + 1)
+                    level.setFileNameL(file_name_l + 1)
+                    level.setDisplayNameW(display_name_w)
+                    level.setDisplayNameL(display_name_l)
                     level.setFlags(flags)
 
                     # Add it to world
                     world.Levels.append(level)
+
             # Add it to worlds
             worlds.append(world)
 
@@ -224,140 +206,95 @@ class LevelInfoFile():
         self.worlds = worlds
 
         # Get the comments
-        start = self.GetCommentsOffset()
-        end = minTextOffset - 1 # collected this while in the self.worlds populating loop
-        self.comments = ''
-        for i in range(start, end):
-            self.comments += chr(rawdata[i])
+        self.comments = rawdata[self.getCommentsOffset() : min_text_offs - 1].decode('ascii')
 
-    def GetCommentsOffset(self):
+    def getCommentsOffset(self):
         """Calculates the offset of the comments based on worlds and levels"""
         # I'm trying to make this as easy-to-read as possible.
         offset = 0
 
-        offset += 4 # "NWRp" text
-        offset += 4 # Number of Worlds bytes
+        offset += 4  # "NWRp" text
+        offset += 4  # Number of Worlds bytes
         for world in self.worlds:
-            offset += 4 # Offset to the world data in the file header
-            offset += 4 # Number of Levels bytes
+            offset += 4  # Offset to the world data in the file header
+            offset += 4  # Number of Levels bytes
 
-            if world.HasL: offset += 12 # data for that takes 12 bytes
-            if world.HasR: offset += 12 # same as above
+            if world.HasL: offset += 12  # data for that takes 12 bytes
+            if world.HasR: offset += 12  # same as above
             for level in world.Levels:
-                offset += 12 # Each level is 12 bytes
+                offset += 12  # Each level is 12 bytes
 
         return offset
 
     def save(self):
         """Returns bytes that can be saved back to a LevelInfo.bin file"""
-        result = []
-        TextStart = self.GetCommentsOffset() + len(self.comments) + 1
+        result = bytearray()
+        text_start = self.getCommentsOffset() + len(self.comments) + 1
 
         # First things first - add "NWRp"
-        result.append(ord('N'))
-        result.append(ord('W'))
-        result.append(ord('R'))
-        result.append(ord('p'))
+        result.extend(b'NWRp')
 
         # Add the Number of Worlds value (we'll only worry about the last 2 bytes)
-        NumOfWorlds = len(self.worlds)
-        result.append((NumOfWorlds >> 24) & 0xFF)
-        result.append((NumOfWorlds >> 16) & 0xFF)
-        result.append((NumOfWorlds >>  8) & 0xFF)
-        result.append((NumOfWorlds >>  0) & 0xFF)
+        result.extend(struct.pack('>I', len(self.worlds)))
 
         # Add blank spaces for each world value
-        for w in self.worlds:
-            for i in range(4): result.append(0)
+        result.extend(b'\0\0\0\0' * len(self.worlds))
 
         # Add worlds and world-offsets at the same time
-        CurrentOffset = len(result)
-        CurrentTextOffset = int(TextStart) # make a new int
-        Text = []
-        WorldNumber = 0
-        for world in self.worlds:
+        current_offs = len(result)
+        current_text_offs = text_start
+        text = bytearray()
+        LEVEL_ENTRY_STRUCT = struct.Struct('>5BxHI')
+        for i, world in enumerate(self.worlds):
             # Set the World Offset start value to CurrentOffset
-            result[ 8+(WorldNumber*4)] = (CurrentOffset >> 24) & 0xFF
-            result[ 9+(WorldNumber*4)] = (CurrentOffset >> 16) & 0xFF
-            result[10+(WorldNumber*4)] = (CurrentOffset >>  8) & 0xFF
-            result[11+(WorldNumber*4)] = (CurrentOffset >>  0) & 0xFF
+            struct.pack_into('>I', result, 8 + i * 4, current_offs)
 
             # Create a place to store some world info
-            worldData = []
+            world_data = bytearray()
 
             # Add the Number of Levels value
             num = len(world.Levels)
             if world.HasL: num += 1
             if world.HasR: num += 1
-            worldData.append((num >> 24) & 0xFF)
-            worldData.append((num >> 16) & 0xFF)
-            worldData.append((num >>  8) & 0xFF)
-            worldData.append((num >>  0) & 0xFF)
+            world_data.extend(struct.pack('>I', num))
 
             # Add data to worldData for each world half
             for exists, name in zip((world.HasL, world.HasR), ('L', 'R')):
                 if not exists: continue
-                WName = eval('world.%sName' % name)
-                worldData.append(0x62) # filename: 98-98
-                worldData.append(0x62)
-                worldData.append(world.WorldNumber) # display name: WN-100
-                worldData.append(0x64 if name =='L' else 0x65)
-                worldData.append(len(WName))
-                worldData.append(0x00)
-                worldData.append(0x00 if name == 'L' else 0x04)
-                worldData.append(0x00)
-                worldData.append(0x00)
-                worldData.append(0x00)
-                worldData.append((CurrentTextOffset >> 8) & 0xFF)
-                worldData.append((CurrentTextOffset >> 0) & 0xFF)
-                CurrentTextOffset += len(WName) + 1
-                for char in WName: Text.append(ord(char))
-                Text.append(0x00)
+                w_name = getattr(world, f'{name}Name')
+                world_data.extend(LEVEL_ENTRY_STRUCT.pack(
+                    98, 98,  # filename: 98-98
+                    world.WorldNumber, (101 if name == 'R' else 100),  # display name: WN-100
+                    len(w_name),
+                    (0x400 if name == 'R' else 0),
+                    current_text_offs))
+
+                current_text_offs += len(w_name) + 1
+                text.extend(w_name.encode('ascii') + b'\0')
 
             # Add data to worldData for each level
             for level in world.Levels:
-                flags = level.getFlags()
-                worldData.append(level.FileW - 1)
-                worldData.append(level.FileL - 1)
-                worldData.append(level.DisplayW)
-                worldData.append(level.DisplayL)
-                worldData.append(len(level.name))
-                worldData.append(0x00)
-                worldData.append((flags >> 8) & 0xFF)
-                worldData.append((flags >> 0) & 0xFF)
-                worldData.append(0x00)
-                worldData.append(0x00)
-                worldData.append((CurrentTextOffset >> 8) & 0xFF)
-                worldData.append((CurrentTextOffset >> 0) & 0xFF)
-                CurrentTextOffset += len(level.name) + 1
-                for char in level.name: Text.append(ord(char))
-                Text.append(0x00)
+                world_data.extend(LEVEL_ENTRY_STRUCT.pack(
+                    (level.FileW - 1) & 0xff, (level.FileL - 1) & 0xff,
+                    level.DisplayW, level.DisplayL,
+                    len(level.name),
+                    level.getFlags(),
+                    current_text_offs))
+
+                current_text_offs += len(level.name) + 1
+                text.extend(level.name.encode('ascii') + b'\0')
 
             # Add worldData to result
-            for i in worldData:
-                result.append(i)
-                CurrentOffset += 1
-
-            # Get ready for the next world
-            WorldNumber += 1
+            result.extend(world_data)
+            current_offs += len(world_data)
 
         # Add the comments
-        for char in self.comments: result.append(ord(char))
-        result.append(0x00)
+        result.extend(self.comments.encode('ascii') + b'\0')
 
         # Add text
-        for char in Text:
-            char = char - 0x30
-            if char < 0: char += 256
-            result.append(char)
+        result.extend([(c - 0x30) & 0xff for c in text])
 
-        # Py2 saves binary files as strings
-        if sys.version[0] == '2':
-            string = ''
-            for i in result: string += chr(i)
-            return string
-        else:
-            return bytes(result)
+        return bytes(result)
 
 
 ########################################################################
