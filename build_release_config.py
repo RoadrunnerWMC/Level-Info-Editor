@@ -22,6 +22,7 @@ USE_PYQT = True
 USE_NSMBLIB = False
 
 EXCLUDE_HASHLIB = True
+EXCLUDE_INSPECT = False  # needed for dataclasses
 
 # macOS only
 AUTO_APP_BUNDLE_NAME = SCRIPT_FILE.split('.')[0] + '.app'

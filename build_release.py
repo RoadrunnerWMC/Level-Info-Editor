@@ -94,13 +94,16 @@ print('>> Populating excludes and includes...')
 print('>>')
 
 # Excludes
-excludes = ['calendar', 'datetime', 'difflib', 'doctest', 'inspect',
+excludes = ['calendar', 'datetime', 'difflib', 'doctest',
     'multiprocessing', 'optpath', 'os2emxpath', 'pdb', 'socket', 'ssl',
     'unittest',
     'FixTk', 'tcl', 'tk', '_tkinter', 'tkinter', 'Tkinter']
 
 if config.EXCLUDE_HASHLIB:
     excludes.append('hashlib')
+
+if config.EXCLUDE_INSPECT:
+    excludes.append('inspect')
 
 if sys.platform == 'nt':
     excludes.append('posixpath')
