@@ -372,9 +372,22 @@ class LevelInfoViewer(QtWidgets.QWidget):
         """Update item names in all three item-picker widgets"""
         for item in self.world_picker.findItems('', QtCore.Qt.MatchFlag.MatchContains):
             world = item.data(QtCore.Qt.ItemDataRole.UserRole)
+
             text = 'World '
-            if world.world_number is None: text += '(unknown)'
-            else: text += str(world.world_number)
+            if world.world_number is None:
+                text += '?'
+            else:
+                text += str(world.world_number)
+
+                half_names = []
+                if world.has_left: half_names.append(world.name_left.strip())
+                if world.has_right: half_names.append(world.name_right.strip())
+                while '' in half_names:
+                    half_names.remove('')
+
+                if half_names:
+                    text += f' ({", ".join(half_names)})'
+
             item.setText(text)
 
         for item in self.level_picker.findItems('', QtCore.Qt.MatchFlag.MatchContains):
@@ -535,7 +548,7 @@ class LevelInfoViewer(QtWidgets.QWidget):
     def handle_level_drag_drop(self) -> None:
         """Handle dragging-and-dropping in the level picker"""
         world = self.world_picker.currentItem().data(QtCore.Qt.ItemDataRole.UserRole)
-        
+
         new_levels = []
         for item in self.level_picker.findItems('', QtCore.Qt.MatchFlag.MatchContains):
             new_levels.append(item.data(QtCore.Qt.ItemDataRole.UserRole))
@@ -970,7 +983,7 @@ class MainWindow(QtWidgets.QMainWindow):
         f = m.addMenu('&File')
 
         open_action = f.addAction('Open File...')
-        open_action.setShortcut('Ctrl+O') 
+        open_action.setShortcut('Ctrl+O')
         open_action.triggered.connect(self.handle_open)
 
         self.save_action = f.addAction('Save File')
