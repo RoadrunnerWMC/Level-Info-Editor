@@ -30,7 +30,7 @@
 ################################################################
 
 
-version = '1.6'
+VERSION = '1.6'
 
 from PyQt5 import QtCore, QtGui, QtWidgets
 import sys
@@ -1168,7 +1168,7 @@ class MainWindow(QtWidgets.QMainWindow):
     def HandleAbout(self):
         """Shows the About dialog"""
         try: readme = open('readme.md', 'r').read()
-        except: readme = 'Level Info Editor %s by RoadrunnerWMC\n(No readme.md found!)\nLicensed under GPL 3' % version
+        except: readme = 'Level Info Editor %s by RoadrunnerWMC\n(No readme.md found!)\nLicensed under GPL 3' % VERSION
 
         txtedit = QtWidgets.QPlainTextEdit(readme)
         txtedit.setReadOnly(True)
