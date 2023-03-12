@@ -32,9 +32,13 @@
 
 VERSION = '1.6'
 
-from PyQt5 import QtCore, QtGui, QtWidgets
 import struct
 import sys
+
+try:
+    from PyQt6 import QtCore, QtGui, QtWidgets
+except ImportError:
+    from PyQt5 import QtCore, QtGui, QtWidgets
 
 
 
@@ -309,7 +313,7 @@ class DNDPicker(QtWidgets.QListWidget):
     def __init__(self, handler):
         QtWidgets.QListWidget.__init__(self)
         self.handler = handler
-        self.setDragDropMode(QtWidgets.QListWidget.InternalMove)
+        self.setDragDropMode(QtWidgets.QListWidget.DragDropMode.InternalMove)
     def dropEvent(self, event):
         QtWidgets.QListWidget.dropEvent(self, event)
         self.handler()
@@ -419,7 +423,7 @@ class LevelInfoViewer(QtWidgets.QWidget):
         # Add worlds
         for world in self.file.worlds:
             item = QtWidgets.QListWidgetItem() # self.UpdateNames will add the name
-            item.setData(QtCore.Qt.UserRole, world)
+            item.setData(QtCore.Qt.ItemDataRole.UserRole, world)
             self.WorldPicker.addItem(item)
 
         # Add comments
@@ -431,16 +435,16 @@ class LevelInfoViewer(QtWidgets.QWidget):
     def UpdateNames(self):
         """Updates item names in all 3 item-picker widgets"""
         # WorldPicker
-        for item in self.WorldPicker.findItems('', QtCore.Qt.MatchContains):
-            world = item.data(QtCore.Qt.UserRole)
+        for item in self.WorldPicker.findItems('', QtCore.Qt.MatchFlag.MatchContains):
+            world = item.data(QtCore.Qt.ItemDataRole.UserRole)
             text = 'World '
             if world.WorldNumber == None: text += '(unknown)'
             else: text += str(world.WorldNumber)
             item.setText(text)
 
         # LevelPicker
-        for item in self.LevelPicker.findItems('', QtCore.Qt.MatchContains):
-            level = item.data(QtCore.Qt.UserRole)
+        for item in self.LevelPicker.findItems('', QtCore.Qt.MatchFlag.MatchContains):
+            level = item.data(QtCore.Qt.ItemDataRole.UserRole)
             item.setText(level.name)
 
     def saveFile(self):
@@ -474,7 +478,7 @@ class LevelInfoViewer(QtWidgets.QWidget):
 
         # Get the world
         if currentItem == None: return
-        world = currentItem.data(QtCore.Qt.UserRole)
+        world = currentItem.data(QtCore.Qt.ItemDataRole.UserRole)
 
         # Set up the World Options Editor
         self.WorldEdit.setWorld(world)
@@ -482,7 +486,7 @@ class LevelInfoViewer(QtWidgets.QWidget):
         # Add levels to self.LevelPicker
         for level in world.Levels:
             item = QtWidgets.QListWidgetItem(level.name)
-            item.setData(QtCore.Qt.UserRole, level)
+            item.setData(QtCore.Qt.ItemDataRole.UserRole, level)
             self.LevelPicker.addItem(item)
         self.LevelPicker.setCurrentRow(0)
 
@@ -495,7 +499,7 @@ class LevelInfoViewer(QtWidgets.QWidget):
         # Add it to self.file and self.WorldPicker
         self.file.worlds.append(world)
         item = QtWidgets.QListWidgetItem(text)
-        item.setData(QtCore.Qt.UserRole, world)
+        item.setData(QtCore.Qt.ItemDataRole.UserRole, world)
         self.WorldPicker.addItem(item)
         self.WorldPicker.scrollToItem(item)
         item.setSelected(True)
@@ -505,7 +509,7 @@ class LevelInfoViewer(QtWidgets.QWidget):
     def HandleWR(self):
         """Handles Remove World button clicks"""
         item = self.WorldPicker.currentItem()
-        world = item.data(QtCore.Qt.UserRole)
+        world = item.data(QtCore.Qt.ItemDataRole.UserRole)
 
         # Remove it from file and the picker
         self.file.worlds.remove(world)
@@ -516,8 +520,8 @@ class LevelInfoViewer(QtWidgets.QWidget):
     def HandleWDragDrop(self):
         """Handles dragging-and-dropping in the World Picker"""
         newWorlds = []
-        for item in self.WorldPicker.findItems('', QtCore.Qt.MatchContains):
-            world = item.data(QtCore.Qt.UserRole)
+        for item in self.WorldPicker.findItems('', QtCore.Qt.MatchFlag.MatchContains):
+            world = item.data(QtCore.Qt.ItemDataRole.UserRole)
             newWorlds.append(world)
         self.file.Worlds = newWorlds
 
@@ -549,7 +553,7 @@ class LevelInfoViewer(QtWidgets.QWidget):
 
         # Get the level
         if currentItem == None: return
-        level = currentItem.data(QtCore.Qt.UserRole)
+        level = currentItem.data(QtCore.Qt.ItemDataRole.UserRole)
 
         # Set LevelEdit to edit it
         self.LevelEdit.setLevel(level)
@@ -576,10 +580,10 @@ class LevelInfoViewer(QtWidgets.QWidget):
         text = 'New Level'
         level.setName(text)
         item = QtWidgets.QListWidgetItem(text)
-        item.setData(QtCore.Qt.UserRole, level)
+        item.setData(QtCore.Qt.ItemDataRole.UserRole, level)
 
         # Add it to the current world and self.LevelPicker
-        w = self.WorldPicker.currentItem().data(QtCore.Qt.UserRole)
+        w = self.WorldPicker.currentItem().data(QtCore.Qt.ItemDataRole.UserRole)
         w.Levels.append(level)
         self.LevelPicker.addItem(item)
         self.LevelPicker.scrollToItem(item)
@@ -590,10 +594,10 @@ class LevelInfoViewer(QtWidgets.QWidget):
     def HandleLR(self):
         """Handles Remove Level button clicks"""
         item = self.LevelPicker.currentItem()
-        level = item.data(QtCore.Qt.UserRole)
+        level = item.data(QtCore.Qt.ItemDataRole.UserRole)
 
         # Remove it from file and the picker
-        w = self.WorldPicker.currentItem().data(QtCore.Qt.UserRole)
+        w = self.WorldPicker.currentItem().data(QtCore.Qt.ItemDataRole.UserRole)
         w.Levels.remove(level)
         self.LevelPicker.takeItem(self.LevelPicker.row(item))
 
@@ -601,13 +605,13 @@ class LevelInfoViewer(QtWidgets.QWidget):
 
     def HandleLDragDrop(self):
         """Handles dragging-and-dropping in the Level Picker"""
-        w = self.WorldPicker.currentItem().data(QtCore.Qt.UserRole)
+        w = self.WorldPicker.currentItem().data(QtCore.Qt.ItemDataRole.UserRole)
         
         newLevels = []
-        for item in self.LevelPicker.findItems('', QtCore.Qt.MatchContains):
-            level = item.data(QtCore.Qt.UserRole)
+        for item in self.LevelPicker.findItems('', QtCore.Qt.MatchFlag.MatchContains):
+            level = item.data(QtCore.Qt.ItemDataRole.UserRole)
             newLevels.append(level)
-        w = self.WorldPicker.currentItem().data(QtCore.Qt.UserRole)
+        w = self.WorldPicker.currentItem().data(QtCore.Qt.ItemDataRole.UserRole)
         w.Levels = newLevels
 
         self.UpdateNames()
@@ -845,11 +849,11 @@ class LevelEditor(QtWidgets.QGroupBox):
         # Changing the selected level causes the field edit widget to
         # lose focus, so we pass it in the signal and ask that the
         # handler function please refocus it after switching levels.
-        if event.type() == QtCore.QEvent.KeyPress:
-            if event.key() == QtCore.Qt.Key_PageUp:
+        if event.type() == QtCore.QEvent.Type.KeyPress:
+            if event.key() == QtCore.Qt.Key.Key_PageUp:
                 self.navRequest.emit(True, obj)
                 return True
-            elif event.key() == QtCore.Qt.Key_PageDown:
+            elif event.key() == QtCore.Qt.Key.Key_PageDown:
                 self.navRequest.emit(False, obj)
                 return True
 
@@ -1110,7 +1114,7 @@ class MainWindow(QtWidgets.QMainWindow):
         txtedit = QtWidgets.QPlainTextEdit(readme)
         txtedit.setReadOnly(True)
 
-        buttonBox = QtWidgets.QDialogButtonBox(QtWidgets.QDialogButtonBox.Ok)
+        buttonBox = QtWidgets.QDialogButtonBox(QtWidgets.QDialogButtonBox.StandardButton.Ok)
 
         layout = QtWidgets.QVBoxLayout()
         layout.addWidget(txtedit)
@@ -1121,7 +1125,7 @@ class MainWindow(QtWidgets.QMainWindow):
         dlg.setModal(True)
         dlg.setMinimumWidth(384)
         buttonBox.accepted.connect(dlg.accept)
-        dlg.exec_()
+        dlg.exec()
 
 
 
@@ -1130,5 +1134,5 @@ def main():
     """Main startup function"""
     app = QtWidgets.QApplication(sys.argv)
     mainWindow = MainWindow()
-    sys.exit(app.exec_())
+    sys.exit(app.exec())
 main()
