@@ -32,8 +32,10 @@
 
 VERSION = '1.6'
 
+import dataclasses
 import struct
 import sys
+from typing import List, Optional
 
 try:
     from PyQt6 import QtCore, QtGui, QtWidgets
@@ -41,130 +43,69 @@ except ImportError:
     from PyQt5 import QtCore, QtGui, QtWidgets
 
 
-
-class WorldInfo():
-    """Class that represents a world"""
-    def __init__(self):
-        """Initialises the WorldInfo"""
-        self.WorldNumber = None
-        self.HasL = False
-        self.HasR = False
-        self.LName = ''
-        self.RName = ''
-        self.Levels = []
-
-    def toPyObject(self):
-        """Py2/Py3 compatibility"""
-        return self
-
-    def setWorldNumber(self, number=None):
-        """Sets the world number (None is a valid value)"""
-        self.WorldNumber = number
-
-    def setLeftHalf(self, exists):
-        """Turns the left half on or off"""
-        self.HasL = exists
-
-    def setRightHalf(self, exists):
-        """Turns the right half on or off"""
-        self.HasR = exists
-
-    def setLeftName(self, name):
-        """Sets the left half name"""
-        self.LName = name
-
-    def setRightName(self, name):
-        """Sets the right half name"""
-        self.RName = name    
-
-
-
-
+@dataclasses.dataclass
 class LevelInfo():
-    """Class that represents a level"""
-    def __init__(self):
-        """Initialises the LevelInfo"""
-        self.name = ''
-        self.FileW = 0
-        self.FileL = 0
-        self.DisplayW = 0
-        self.DisplayL = 0
-        self.IsLevel = True
-        self.NormalExit = False
-        self.SecretExit = False
-        self.RightSide = False
+    """Represents a level"""
+    name: str = ''
+    file_world: int = 0
+    file_level: int = 0
+    display_world: int = 0
+    display_level: int = 0
+    in_star_coins_menu: bool = True
+    has_normal_exit: bool = False
+    has_secret_exit: bool = False
+    is_right_side: bool = False
 
-    def toPyObject(self):
-        """Py2/Py3 compatibility"""
-        return self
-
-    def setName(self, name):
-        """Sets the level name"""
-        self.name = name
-
-    def setFileNameW(self, world):
-        """Sets the filename (world number)"""
-        self.FileW = world
-
-    def setFileNameL(self, level):
-        """Sets the filename (level number)"""
-        self.FileL = level
-
-    def setDisplayNameW(self, world):
-        """Sets the Display name (world number)"""
-        self.DisplayW = world
-
-    def setDisplayNameL(self, level):
-        """Sets the Display name (level number)"""
-        self.DisplayL = level
-
-    def setFlags(self, flags):
-        """Sets some flags"""
-        self.IsLevel     = ((flags >> 1)  & 1 == 1)
-        self.NormalExit  = ((flags >> 4)  & 1 == 1)
-        self.SecretExit  = ((flags >> 5)  & 1 == 1)
-        self.RightSide   = ((flags >> 10) & 1 == 1)
-
-    def getFlags(self):
-        """Returns an int which represent the two bytes the flags are encoded in"""
-        b1 = 0
-        b2 = 0
-        if self.IsLevel:    b1 += 0x02
-        if self.NormalExit: b1 += 0x10
-        if self.SecretExit: b1 += 0x20
-        if self.RightSide:  b2 += 0x04
-        return (b2 << 8) | b1
+    @property
+    def flags(self) -> int:
+        flags = 0
+        if self.in_star_coins_menu: flags |= 0x0002
+        if self.has_normal_exit:    flags |= 0x0010
+        if self.has_secret_exit:    flags |= 0x0020
+        if self.is_right_side:      flags |= 0x0400
+        return flags
+    @flags.setter
+    def flags(self, value: int) -> None:
+        self.in_star_coins_menu = bool(value & 0x0002)
+        self.has_normal_exit    = bool(value & 0x0010)
+        self.has_secret_exit    = bool(value & 0x0020)
+        self.is_right_side      = bool(value & 0x0400)
 
 
+@dataclasses.dataclass
+class WorldInfo():
+    """Represents a world"""
+    world_number: Optional[int] = None
+    has_left: bool = False
+    has_right: bool = False
+    name_left: str = ''
+    name_right: str = ''
+    levels: List[LevelInfo] = dataclasses.field(default_factory=list)
 
+
+@dataclasses.dataclass
 class LevelInfoFile():
-    """Class that represents LevelInfo.bin"""
-    def __init__(self, rawdata=None):
-        """Initialises the LevelInfoFile"""
-        if rawdata == None: self.initAsEmpty()
-        else: self.initFromData(rawdata)
+    """Represents LevelInfo.bin"""
+    worlds: List[WorldInfo] = dataclasses.field(default_factory=list)
+    comments: str = ''
 
-    def initAsEmpty(self):
-        """Sets all the variables to their defaults"""
-        self.worlds = []
-        self.comments = ''
-
-    def initFromData(self, rawdata):
-        """Initialises the LevelInfoFile from raw binary data"""
+    @classmethod
+    def from_data(cls, data: bytes) -> 'LevelInfoFile':
+        """Create a LevelInfoFile from file data"""
 
         # Check for the file header
-        if not rawdata.startswith(b'NWRp'):
+        if not data.startswith(b'NWRp'):
             return
 
-        magic, num_worlds = struct.unpack_from('>4sI', rawdata, 0)
-        world_offsets = struct.unpack_from(f'>{num_worlds}I', rawdata, 0x08)
+        magic, num_worlds = struct.unpack_from('>4sI', data, 0)
+        world_offsets = struct.unpack_from(f'>{num_worlds}I', data, 0x08)
 
         # Load the worlds
         min_text_offs = 0xFFFFFFFF
         worlds = []
         LEVEL_ENTRY_STRUCT = struct.Struct('>5BxHI')
         for world_i, world_offset in enumerate(world_offsets):
-            num_levels, = struct.unpack_from(f'>I', rawdata, world_offset)
+            num_levels, = struct.unpack_from(f'>I', data, world_offset)
 
             # Make a world and add levels/headers to it
             world = WorldInfo()
@@ -174,71 +115,70 @@ class LevelInfoFile():
                     file_name_w, file_name_l,
                     display_name_w, display_name_l,
                     text_len, flags, text_offs,
-                ) = LEVEL_ENTRY_STRUCT.unpack_from(rawdata, level_offs)
+                ) = LEVEL_ENTRY_STRUCT.unpack_from(data, level_offs)
 
-                if text_offs < min_text_offs: min_text_offs = text_offs
-                text_enc = rawdata[text_offs : text_offs + text_len]
+                min_text_offs = min(min_text_offs, text_offs)
+                text_enc = data[text_offs : text_offs + text_len]
                 text = bytes((c + 0x30) & 0xff for c in text_enc).decode('ascii')
 
                 # Add header info or levels
                 if display_name_l >= 100:
                     # It's a world header
-                    world.setWorldNumber(display_name_w)
+                    world.world_number = display_name_w
                     if display_name_l == 100:
-                        world.setLeftHalf(True)
-                        world.setLeftName(text)
+                        world.has_left = True
+                        world.name_left = text
                     else:
-                        world.setRightHalf(True)
-                        world.setRightName(text)
+                        world.has_right = True
+                        world.name_right = text
                 else:
                     # It's a real level
-                    level = LevelInfo()
-                    level.setName(text)
-                    level.setFileNameW(file_name_w + 1)
-                    level.setFileNameL(file_name_l + 1)
-                    level.setDisplayNameW(display_name_w)
-                    level.setDisplayNameL(display_name_l)
-                    level.setFlags(flags)
-
-                    # Add it to world
-                    world.Levels.append(level)
+                    world.levels.append(LevelInfo(
+                        name=text,
+                        file_world=(file_name_w + 1),
+                        file_level=(file_name_l + 1),
+                        display_world=display_name_w,
+                        display_level=display_name_l))
+                    world.levels[-1].flags = flags
 
             # Add it to worlds
             worlds.append(world)
 
-        # Assign worlds to self.worlds
-        self.worlds = worlds
+        # Create instance
+        self = cls(worlds)
 
         # Get the comments
-        self.comments = rawdata[self.getCommentsOffset() : min_text_offs - 1].decode('ascii')
+        self.comments = data[self.get_comments_offset() : min_text_offs - 1].decode('ascii')
 
-    def getCommentsOffset(self):
-        """Calculates the offset of the comments based on worlds and levels"""
+        return self
+
+    def get_comments_offset(self) -> int:
+        """Calculate the offset of the comments data"""
         # I'm trying to make this as easy-to-read as possible.
         offset = 0
 
         offset += 4  # "NWRp" text
-        offset += 4  # Number of Worlds bytes
+        offset += 4  # Number-of-worlds bytes
         for world in self.worlds:
             offset += 4  # Offset to the world data in the file header
-            offset += 4  # Number of Levels bytes
+            offset += 4  # Number-of-levels bytes
 
-            if world.HasL: offset += 12  # data for that takes 12 bytes
-            if world.HasR: offset += 12  # same as above
-            for level in world.Levels:
+            if world.has_left: offset += 12  # Data for that takes 12 bytes
+            if world.has_right: offset += 12  # Same as above
+            for level in world.levels:
                 offset += 12  # Each level is 12 bytes
 
         return offset
 
-    def save(self):
-        """Returns bytes that can be saved back to a LevelInfo.bin file"""
+    def save(self) -> bytes:
+        """Return LevelInfo.bin file data"""
         result = bytearray()
-        text_start = self.getCommentsOffset() + len(self.comments) + 1
+        text_start = self.get_comments_offset() + len(self.comments) + 1
 
         # First things first - add "NWRp"
         result.extend(b'NWRp')
 
-        # Add the Number of Worlds value (we'll only worry about the last 2 bytes)
+        # Add the number-of-worlds value (we'll only worry about the last 2 bytes)
         result.extend(struct.pack('>I', len(self.worlds)))
 
         # Add blank spaces for each world value
@@ -250,25 +190,25 @@ class LevelInfoFile():
         text = bytearray()
         LEVEL_ENTRY_STRUCT = struct.Struct('>5BxHI')
         for i, world in enumerate(self.worlds):
-            # Set the World Offset start value to CurrentOffset
+            # Set the world-offset start value to current_offs
             struct.pack_into('>I', result, 8 + i * 4, current_offs)
 
             # Create a place to store some world info
             world_data = bytearray()
 
-            # Add the Number of Levels value
-            num = len(world.Levels)
-            if world.HasL: num += 1
-            if world.HasR: num += 1
+            # Add the number-of-levels value
+            num = len(world.levels)
+            if world.has_left: num += 1
+            if world.has_right: num += 1
             world_data.extend(struct.pack('>I', num))
 
-            # Add data to worldData for each world half
-            for exists, name in zip((world.HasL, world.HasR), ('L', 'R')):
+            # Add data to world_data for each world half
+            for exists, name in zip((world.has_left, world.has_right), ('L', 'R')):
                 if not exists: continue
                 w_name = getattr(world, f'{name}Name')
                 world_data.extend(LEVEL_ENTRY_STRUCT.pack(
                     98, 98,  # filename: 98-98
-                    world.WorldNumber, (101 if name == 'R' else 100),  # display name: WN-100
+                    world.world_number, (101 if name == 'R' else 100),  # display name: WN-100
                     len(w_name),
                     (0x400 if name == 'R' else 0),
                     current_text_offs))
@@ -276,19 +216,19 @@ class LevelInfoFile():
                 current_text_offs += len(w_name) + 1
                 text.extend(w_name.encode('ascii') + b'\0')
 
-            # Add data to worldData for each level
-            for level in world.Levels:
+            # Add data to world_data for each level
+            for level in world.levels:
                 world_data.extend(LEVEL_ENTRY_STRUCT.pack(
-                    (level.FileW - 1) & 0xff, (level.FileL - 1) & 0xff,
-                    level.DisplayW, level.DisplayL,
+                    (level.file_world - 1) & 0xff, (level.file_level - 1) & 0xff,
+                    level.display_world, level.display_level,
                     len(level.name),
-                    level.getFlags(),
+                    level.flags,
                     current_text_offs))
 
                 current_text_offs += len(level.name) + 1
                 text.extend(level.name.encode('ascii') + b'\0')
 
-            # Add worldData to result
+            # Add world_data to result
             result.extend(world_data)
             current_offs += len(world_data)
 
@@ -311,10 +251,11 @@ class LevelInfoFile():
 class DNDPicker(QtWidgets.QListWidget):
     """A list widget which calls a function when an item's been moved"""
     def __init__(self, handler):
-        QtWidgets.QListWidget.__init__(self)
+        super().__init__()
         self.handler = handler
         self.setDragDropMode(QtWidgets.QListWidget.DragDropMode.InternalMove)
-    def dropEvent(self, event):
+
+    def dropEvent(self, event: QtGui.QDropEvent) -> None:
         QtWidgets.QListWidget.dropEvent(self, event)
         self.handler()
 
@@ -322,306 +263,294 @@ class DNDPicker(QtWidgets.QListWidget):
 class LevelInfoViewer(QtWidgets.QWidget):
     """Widget that views level info"""
     def __init__(self):
-        """Initialises the widget"""
-        QtWidgets.QWidget.__init__(self)
+        super().__init__()
         self.file = LevelInfoFile()
 
         # Create the Worlds widgets
-        WorldBox = QtWidgets.QGroupBox('Worlds')
-        self.WorldPicker = DNDPicker(self.HandleWDragDrop)
-        self.WABtn = QtWidgets.QPushButton('Add')
-        self.WRBtn = QtWidgets.QPushButton('Remove')
+        worlds_box = QtWidgets.QGroupBox('Worlds')
+        self.world_picker = DNDPicker(self.handle_world_drag_drop)
+        self.add_world_button = QtWidgets.QPushButton('Add')
+        self.remove_world_button = QtWidgets.QPushButton('Remove')
 
         # Add some tooltips
-        self.WABtn.setToolTip('<b>Add:</b><br>Adds a world to the file.')
-        self.WRBtn.setToolTip('<b>Remove:</b><br>Removes the currently selected world from the file.')
+        self.add_world_button.setToolTip('<b>Add:</b><br>Adds a world to the file.')
+        self.remove_world_button.setToolTip('<b>Remove:</b><br>Removes the currently selected world from the file.')
 
         # Disable some
-        self.WRBtn.setEnabled(False)
+        self.remove_world_button.setEnabled(False)
 
         # Connect them to handlers
-        self.WorldPicker.currentItemChanged.connect(self.HandleWorldSel)
-        self.WABtn.clicked.connect(self.HandleWA)
-        self.WRBtn.clicked.connect(self.HandleWR)
+        self.world_picker.currentItemChanged.connect(self.handle_world_select)
+        self.add_world_button.clicked.connect(self.handle_add_world)
+        self.remove_world_button.clicked.connect(self.handle_remove_world)
 
         # Make a layout
-        L = QtWidgets.QGridLayout()
-        L.addWidget(self.WorldPicker, 0, 0, 1, 2)
-        L.addWidget(self.WABtn,   1, 0)
-        L.addWidget(self.WRBtn,   1, 1)
-        WorldBox.setLayout(L)
+        L = QtWidgets.QGridLayout(worlds_box)
+        L.addWidget(self.world_picker, 0, 0, 1, 2)
+        L.addWidget(self.add_world_button, 1, 0)
+        L.addWidget(self.remove_world_button, 1, 1)
 
 
         # Create the World Options widget
-        self.WorldEdit = WorldOptionsEditor()
-        self.WorldEdit.dataChanged.connect(self.HandleWorldDatChange)
+        self.world_editor = WorldOptionsEditor()
+        self.world_editor.data_changed.connect(self.handle_world_data_change)
 
 
         # Create the Levels widgets
-        LevelBox = QtWidgets.QWidget()
-        self.LevelPicker = DNDPicker(self.HandleLDragDrop)
-        self.LevelEdit = LevelEditor()
-        self.LABtn = QtWidgets.QPushButton('Add')
-        self.LRBtn = QtWidgets.QPushButton('Remove')
+        levels_box = QtWidgets.QWidget()
+        self.level_picker = DNDPicker(self.handle_level_drag_drop)
+        self.level_editor = LevelEditor()
+        self.add_level_button = QtWidgets.QPushButton('Add')
+        self.remove_level_button = QtWidgets.QPushButton('Remove')
 
         # Add some tooltips
-        self.LABtn.setToolTip('<b>Add:</b><br>Adds a level to the currently selected world.')
-        self.LRBtn.setToolTip('<b>Remove:</b><br>Removes the currently selected level from the world.')
+        self.add_level_button.setToolTip('<b>Add:</b><br>Adds a level to the currently selected world.')
+        self.remove_level_button.setToolTip('<b>Remove:</b><br>Removes the currently selected level from the world.')
 
         # Disable some
-        self.LABtn.setEnabled(False)
-        self.LRBtn.setEnabled(False)
+        self.add_level_button.setEnabled(False)
+        self.remove_level_button.setEnabled(False)
 
         # Connect them to handlers
-        self.LevelPicker.currentItemChanged.connect(self.HandleLevelSel)
-        self.LevelEdit.dataChanged.connect(self.HandleLevelDatChange)
-        self.LevelEdit.navRequest.connect(self.HandleLevelNavRequest)
-        self.LABtn.clicked.connect(self.HandleLA)
-        self.LRBtn.clicked.connect(self.HandleLR)
+        self.level_picker.currentItemChanged.connect(self.handle_level_select)
+        self.level_editor.data_changed.connect(self.handle_level_data_change)
+        self.level_editor.nav_request.connect(self.handle_level_nav_request)
+        self.add_level_button.clicked.connect(self.handle_add_level)
+        self.remove_level_button.clicked.connect(self.handle_remove_level)
 
         # Make a layout
-        L = QtWidgets.QGridLayout()
-        L.addWidget(self.LevelPicker, 0, 0, 1, 2)
-        L.addWidget(self.LABtn,       1, 0)
-        L.addWidget(self.LRBtn,       1, 1)
-        L.addWidget(self.LevelEdit,   2, 0, 1, 2)
-        LevelBox.setLayout(L)
+        L = QtWidgets.QGridLayout(levels_box)
+        L.addWidget(self.level_picker, 0, 0, 1, 2)
+        L.addWidget(self.add_level_button, 1, 0)
+        L.addWidget(self.remove_level_button, 1, 1)
+        L.addWidget(self.level_editor, 2, 0, 1, 2)
 
 
         # Create the Comments editor and layout
-        self.CommentsBox = QtWidgets.QWidget()
+        comments_box = QtWidgets.QWidget()
         label = QtWidgets.QLabel('You can add comments to the file here:')
-        self.CommentsEdit = QtWidgets.QPlainTextEdit()
+        self.comments_editor = QtWidgets.QPlainTextEdit()
 
-        self.CommentsEdit.textChanged.connect(self.HandleCommentsChanged)
+        self.comments_editor.textChanged.connect(self.handle_comments_changed)
 
-        STL = QtWidgets.QVBoxLayout()
-        STL.addWidget(label)
-        STL.addWidget(self.CommentsEdit)
-        self.CommentsBox.setLayout(STL)
+        L = QtWidgets.QVBoxLayout(comments_box)
+        L.addWidget(label)
+        L.addWidget(self.comments_editor)
 
 
         # Create the tab widget
         tab = QtWidgets.QTabWidget()
-        tab.addTab(self.WorldEdit, 'World Options')
-        tab.addTab(LevelBox, 'Levels')
-        tab.addTab(self.CommentsBox, 'Comments')
+        tab.addTab(self.world_editor, 'World Options')
+        tab.addTab(levels_box, 'Levels')
+        tab.addTab(comments_box, 'Comments')
 
         # Make a main layout
-        L = QtWidgets.QHBoxLayout()
-        L.addWidget(WorldBox)
+        L = QtWidgets.QHBoxLayout(self)
+        L.addWidget(worlds_box)
         L.addWidget(tab)
-        self.setLayout(L)
 
-    def setFile(self, file):
-        """Changes the file to view"""
+    def set_file(self, file: LevelInfoFile) -> None:
+        """Change the file to view"""
         self.file = file
 
-        self.WorldPicker.clear()
-        self.LevelPicker.clear()
+        self.world_picker.clear()
+        self.level_picker.clear()
 
         # Add worlds
         for world in self.file.worlds:
-            item = QtWidgets.QListWidgetItem() # self.UpdateNames will add the name
+            item = QtWidgets.QListWidgetItem()  # self.update_names() will add the name
             item.setData(QtCore.Qt.ItemDataRole.UserRole, world)
-            self.WorldPicker.addItem(item)
+            self.world_picker.addItem(item)
 
         # Add comments
-        self.CommentsEdit.setPlainText(self.file.comments)
+        self.comments_editor.setPlainText(self.file.comments)
 
         # Update world names
-        self.UpdateNames()
+        self.update_names()
 
-    def UpdateNames(self):
-        """Updates item names in all 3 item-picker widgets"""
-        # WorldPicker
-        for item in self.WorldPicker.findItems('', QtCore.Qt.MatchFlag.MatchContains):
+    def update_names(self) -> None:
+        """Update item names in all three item-picker widgets"""
+        for item in self.world_picker.findItems('', QtCore.Qt.MatchFlag.MatchContains):
             world = item.data(QtCore.Qt.ItemDataRole.UserRole)
             text = 'World '
-            if world.WorldNumber == None: text += '(unknown)'
-            else: text += str(world.WorldNumber)
+            if world.world_number is None: text += '(unknown)'
+            else: text += str(world.world_number)
             item.setText(text)
 
-        # LevelPicker
-        for item in self.LevelPicker.findItems('', QtCore.Qt.MatchFlag.MatchContains):
+        for item in self.level_picker.findItems('', QtCore.Qt.MatchFlag.MatchContains):
             level = item.data(QtCore.Qt.ItemDataRole.UserRole)
             item.setText(level.name)
 
-    def saveFile(self):
-        """Returns the file in saved form"""
-        return self.file.save() # self.file does this for us
+    def save_file(self) -> bytes:
+        """Return the file in saved form"""
+        return self.file.save()  # self.file does this for us
 
 
+    # World functions
 
-    # World Functions
-
-    def HandleWorldSel(self):
-        """Handles the user picking a world"""
-        self.WorldEdit.clear()
-        self.LevelPicker.clear()
-        self.LevelEdit.clear()
+    def handle_world_select(self) -> None:
+        """Handle the user picking a world"""
+        self.world_editor.clear()
+        self.level_picker.clear()
+        self.level_editor.clear()
 
         # Get the current item (it's None if nothing's selected)
-        currentItem = self.WorldPicker.currentItem()
+        current_item = self.world_picker.currentItem()
 
         # Enable/disable buttons
-        if currentItem == None:
-            self.WRBtn.setEnabled(False)
-            self.LABtn.setEnabled(False)
-            self.LRBtn.setEnabled(False)
+        if current_item is None:
+            self.remove_world_button.setEnabled(False)
+            self.add_level_button.setEnabled(False)
+            self.remove_level_button.setEnabled(False)
         else:
-            index = self.WorldPicker.indexFromItem(currentItem).row()
-            numberOfItems = self.WorldPicker.count()
+            index = self.world_picker.indexFromItem(current_item).row()
+            num_items = self.world_picker.count()
 
-            self.WRBtn.setEnabled(True)
-            self.LABtn.setEnabled(True)
+            self.remove_world_button.setEnabled(True)
+            self.add_level_button.setEnabled(True)
 
         # Get the world
-        if currentItem == None: return
-        world = currentItem.data(QtCore.Qt.ItemDataRole.UserRole)
+        if current_item is None: return
+        world = current_item.data(QtCore.Qt.ItemDataRole.UserRole)
 
         # Set up the World Options Editor
-        self.WorldEdit.setWorld(world)
+        self.world_editor.set_world(world)
 
-        # Add levels to self.LevelPicker
-        for level in world.Levels:
+        # Add levels to self.level_picker
+        for level in world.levels:
             item = QtWidgets.QListWidgetItem(level.name)
             item.setData(QtCore.Qt.ItemDataRole.UserRole, level)
-            self.LevelPicker.addItem(item)
-        self.LevelPicker.setCurrentRow(0)
+            self.level_picker.addItem(item)
+        self.level_picker.setCurrentRow(0)
 
 
-    def HandleWA(self):
-        """Handles Add World button clicks"""
+    def handle_add_world(self) -> None:
+        """Handle "Add World" button clicks"""
         world = WorldInfo()
         text = 'World (unknown)'
 
-        # Add it to self.file and self.WorldPicker
+        # Add it to self.file and self.world_picker
         self.file.worlds.append(world)
         item = QtWidgets.QListWidgetItem(text)
         item.setData(QtCore.Qt.ItemDataRole.UserRole, world)
-        self.WorldPicker.addItem(item)
-        self.WorldPicker.scrollToItem(item)
+        self.world_picker.addItem(item)
+        self.world_picker.scrollToItem(item)
         item.setSelected(True)
 
-        self.UpdateNames()
+        self.update_names()
 
-    def HandleWR(self):
-        """Handles Remove World button clicks"""
-        item = self.WorldPicker.currentItem()
+    def handle_remove_world(self) -> None:
+        """Handle "Remove World" button clicks"""
+        item = self.world_picker.currentItem()
         world = item.data(QtCore.Qt.ItemDataRole.UserRole)
 
         # Remove it from file and the picker
         self.file.worlds.remove(world)
-        self.WorldPicker.takeItem(self.WorldPicker.row(item))
+        self.world_picker.takeItem(self.world_picker.row(item))
 
-        self.UpdateNames()
+        self.update_names()
 
-    def HandleWDragDrop(self):
-        """Handles dragging-and-dropping in the World Picker"""
-        newWorlds = []
-        for item in self.WorldPicker.findItems('', QtCore.Qt.MatchFlag.MatchContains):
-            world = item.data(QtCore.Qt.ItemDataRole.UserRole)
-            newWorlds.append(world)
-        self.file.Worlds = newWorlds
+    def handle_world_drag_drop(self) -> None:
+        """Handle dragging-and-dropping in the world picker"""
+        new_worlds = []
+        for item in self.world_picker.findItems('', QtCore.Qt.MatchFlag.MatchContains):
+            new_worlds.append(item.data(QtCore.Qt.ItemDataRole.UserRole))
+        self.file.worlds = new_worlds
 
-        self.UpdateNames()
+        self.update_names()
 
-    def HandleWorldDatChange(self):
-        """Handles the user changing world data"""
-        self.UpdateNames()
-
+    def handle_world_data_change(self) -> None:
+        """Handle the user changing world data"""
+        self.update_names()
 
 
-    # Level Functions
+    # Level functions
 
-    def HandleLevelSel(self):
-        """Handles the user picking a level"""
-        self.LevelEdit.clear()
+    def handle_level_select(self) -> None:
+        """Handle the user picking a level"""
+        self.level_editor.clear()
 
         # Get the current item (it's None if nothing's selected)
-        currentItem = self.LevelPicker.currentItem()
+        current_item = self.level_picker.currentItem()
 
         # Enable/disable buttons
-        if currentItem == None:
-            self.LRBtn.setEnabled(False)
+        if current_item is None:
+            self.remove_level_button.setEnabled(False)
         else:
-            index = self.LevelPicker.indexFromItem(currentItem).row()
-            numberOfItems = self.LevelPicker.count()
+            index = self.level_picker.indexFromItem(current_item).row()
+            num_items = self.level_picker.count()
 
-            self.LRBtn.setEnabled(True)
+            self.remove_level_button.setEnabled(True)
 
         # Get the level
-        if currentItem == None: return
-        level = currentItem.data(QtCore.Qt.ItemDataRole.UserRole)
+        if current_item is None: return
+        level = current_item.data(QtCore.Qt.ItemDataRole.UserRole)
 
         # Set LevelEdit to edit it
-        self.LevelEdit.setLevel(level)
+        self.level_editor.setLevel(level)
 
-    def HandleLevelDatChange(self):
-        """Handles the user changing level data"""
-        self.UpdateNames()
+    def handle_level_data_change(self) -> None:
+        """Handle the user changing level data"""
+        self.update_names()
 
-    def HandleLevelNavRequest(self, isUp, refocusWidget):
-        """Handles the user pressing PgUp or PgDn to switch between levels"""
-        currentRow = self.LevelPicker.currentRow()
+    def handle_level_nav_request(self, is_up: bool, refocus_widget: QtWidgets.QWidget) -> None:
+        """Handle the user pressing PgUp or PgDn to switch between levels"""
+        current_row = self.level_picker.currentRow()
 
-        newRow = currentRow + (-1 if isUp else 1)
-        newRow = max(0, newRow)
-        newRow = min(newRow, self.LevelPicker.count() - 1)
+        new_row = current_row + (-1 if is_up else 1)
+        new_row = max(0, new_row)
+        new_row = min(new_row, self.level_picker.count() - 1)
 
-        if newRow != currentRow:
-            self.LevelPicker.setCurrentRow(newRow)
-            refocusWidget.setFocus(True)
+        if new_row != current_row:
+            self.level_picker.setCurrentRow(new_row)
+            refocus_widget.setFocus(True)
 
-    def HandleLA(self):
-        """Handles Add Level button clicks"""
-        level = LevelInfo()
-        text = 'New Level'
-        level.setName(text)
-        item = QtWidgets.QListWidgetItem(text)
+    def handle_add_level(self) -> None:
+        """Handle "Add Level" button clicks"""
+        level = LevelInfo(name='New Level')
+        item = QtWidgets.QListWidgetItem(level.name)
         item.setData(QtCore.Qt.ItemDataRole.UserRole, level)
 
-        # Add it to the current world and self.LevelPicker
-        w = self.WorldPicker.currentItem().data(QtCore.Qt.ItemDataRole.UserRole)
-        w.Levels.append(level)
-        self.LevelPicker.addItem(item)
-        self.LevelPicker.scrollToItem(item)
+        # Add it to the current world and self.level_picker
+        world = self.world_picker.currentItem().data(QtCore.Qt.ItemDataRole.UserRole)
+        world.levels.append(level)
+        self.level_picker.addItem(item)
+        self.level_picker.scrollToItem(item)
         item.setSelected(True)
 
-        self.UpdateNames()
+        self.update_names()
 
-    def HandleLR(self):
-        """Handles Remove Level button clicks"""
-        item = self.LevelPicker.currentItem()
+    def handle_remove_level(self) -> None:
+        """Handle "Remove Level" button clicks"""
+        item = self.level_picker.currentItem()
         level = item.data(QtCore.Qt.ItemDataRole.UserRole)
 
         # Remove it from file and the picker
-        w = self.WorldPicker.currentItem().data(QtCore.Qt.ItemDataRole.UserRole)
-        w.Levels.remove(level)
-        self.LevelPicker.takeItem(self.LevelPicker.row(item))
+        world = self.world_picker.currentItem().data(QtCore.Qt.ItemDataRole.UserRole)
+        world.levels.remove(level)
+        self.level_picker.takeItem(self.level_picker.row(item))
 
-        self.UpdateNames()
+        self.update_names()
 
-    def HandleLDragDrop(self):
-        """Handles dragging-and-dropping in the Level Picker"""
-        w = self.WorldPicker.currentItem().data(QtCore.Qt.ItemDataRole.UserRole)
+    def handle_level_drag_drop(self) -> None:
+        """Handle dragging-and-dropping in the level picker"""
+        world = self.world_picker.currentItem().data(QtCore.Qt.ItemDataRole.UserRole)
         
-        newLevels = []
-        for item in self.LevelPicker.findItems('', QtCore.Qt.MatchFlag.MatchContains):
-            level = item.data(QtCore.Qt.ItemDataRole.UserRole)
-            newLevels.append(level)
-        w = self.WorldPicker.currentItem().data(QtCore.Qt.ItemDataRole.UserRole)
-        w.Levels = newLevels
+        new_levels = []
+        for item in self.level_picker.findItems('', QtCore.Qt.MatchFlag.MatchContains):
+            new_levels.append(item.data(QtCore.Qt.ItemDataRole.UserRole))
 
-        self.UpdateNames()
+        world = self.world_picker.currentItem().data(QtCore.Qt.ItemDataRole.UserRole)
+        world.levels = new_levels
+
+        self.update_names()
 
 
     # Comments functions
 
-    def HandleCommentsChanged(self):
-        """Handles comments changes"""
-        self.file.comments = str(self.CommentsEdit.toPlainText())
+    def handle_comments_changed(self) -> None:
+        """Handle comments changes"""
+        self.file.comments = str(self.comments_editor.toPlainText())
 
 
 
@@ -635,137 +564,141 @@ class LevelInfoViewer(QtWidgets.QWidget):
 
 class WorldOptionsEditor(QtWidgets.QWidget):
     """Widget that allows the user to change world settings"""
-    dataChanged = QtCore.pyqtSignal()
+    data_changed = QtCore.pyqtSignal()
+
     def __init__(self):
-        """Initialises the WorldOptionsEditor"""
-        QtWidgets.QWidget.__init__(self)
+        super().__init__()
         self.world = None
 
         # Create the data-editing widgets
-        self.NumberEdit = QtWidgets.QSpinBox()
-        self.NumberEdit.setMaximum(255)
-        self.LExistsEdit = QtWidgets.QCheckBox()
-        self.LNameEdit = QtWidgets.QLineEdit()
-        self.LNameEdit.setMaxLength(255)
-        self.RExistsEdit = QtWidgets.QCheckBox()
-        self.RNameEdit = QtWidgets.QLineEdit()
-        self.RNameEdit.setMaxLength(255)
+        self.number_edit = QtWidgets.QSpinBox()
+        self.number_edit.setMaximum(255)
+        self.left_exists_edit = QtWidgets.QCheckBox()
+        self.left_name_edit = QtWidgets.QLineEdit()
+        self.left_name_edit.setMaxLength(255)
+        self.right_exists_edit = QtWidgets.QCheckBox()
+        self.right_name_edit = QtWidgets.QLineEdit()
+        self.right_name_edit.setMaxLength(255)
 
         # Add some tooltips
-        numberWarning = '<br><br><b>Note:</b><br>You can only set the world\'s World Number if you have at least one world half turned on!'
-        self.NumberEdit.setToolTip('<b>World Number:</b><br>Changes the currently selected world\'s World Number.' + numberWarning)
-        self.LExistsEdit.setToolTip('<b>Has a 1st Half:</b><br>If this is checked, the currently selected world will have a first half.' + numberWarning)
-        self.LNameEdit.setToolTip('<b>1st Half Name:</b><br>Changes the name for the first half of the world.')
-        self.RExistsEdit.setToolTip('<b>Has a 2nd Half:</b><br>If this is checked, the currently selected world will have a second half.' + numberWarning)
-        self.RNameEdit.setToolTip('<b>2nd Half Name:</b><br>Changes the name for the second half of the world.')
+        number_warning = "<br><br><b>Note:</b><br>You can only set the world's World Number if you have at least one world half turned on!"
+        self.number_edit.setToolTip("<b>World Number:</b><br>Changes the currently selected world's World Number." + number_warning)
+        self.left_exists_edit.setToolTip('<b>Has a 1st Half:</b><br>If this is checked, the currently selected world will have a first half.' + number_warning)
+        self.left_name_edit.setToolTip('<b>1st Half Name:</b><br>Changes the name for the first half of the world.')
+        self.right_exists_edit.setToolTip('<b>Has a 2nd Half:</b><br>If this is checked, the currently selected world will have a second half.' + number_warning)
+        self.right_name_edit.setToolTip('<b>2nd Half Name:</b><br>Changes the name for the second half of the world.')
 
         # Disable them all
-        self.NumberEdit.setEnabled(False)
-        self.LExistsEdit.setEnabled(False)
-        self.LNameEdit.setEnabled(False)
-        self.RExistsEdit.setEnabled(False)
-        self.RNameEdit.setEnabled(False)
+        self.number_edit.setEnabled(False)
+        self.left_exists_edit.setEnabled(False)
+        self.left_name_edit.setEnabled(False)
+        self.right_exists_edit.setEnabled(False)
+        self.right_name_edit.setEnabled(False)
 
         # Connect them to handlers
-        self.NumberEdit.valueChanged.connect(self.HandleNumberChange)
-        self.LExistsEdit.stateChanged.connect(self.HandleLExistsChange)
-        self.LNameEdit.textEdited.connect(self.HandleLNameChange)
-        self.RExistsEdit.stateChanged.connect(self.HandleRExistsChange)
-        self.RNameEdit.textEdited.connect(self.HandleRNameChange)
+        self.number_edit.valueChanged.connect(self.handle_number_change)
+        self.left_exists_edit.stateChanged.connect(self.handle_left_exists_change)
+        self.left_name_edit.textEdited.connect(self.handle_left_name_change)
+        self.right_exists_edit.stateChanged.connect(self.handle_right_exists_change)
+        self.right_name_edit.textEdited.connect(self.handle_right_name_change)
 
         # Create a layout
-        L = QtWidgets.QFormLayout()
-        L.addRow('World Number:', self.NumberEdit)
-        L.addRow('Has a 1st Half:', self.LExistsEdit)
-        L.addRow('1st Half Name:', self.LNameEdit)
-        L.addRow('Has a 2nd Half:', self.RExistsEdit)
-        L.addRow('2nd Half Name:', self.RNameEdit)
-        self.setLayout(L)
+        L = QtWidgets.QFormLayout(self)
+        L.addRow('World Number:', self.number_edit)
+        L.addRow('Has a 1st Half:', self.left_exists_edit)
+        L.addRow('1st Half Name:', self.left_name_edit)
+        L.addRow('Has a 2nd Half:', self.right_exists_edit)
+        L.addRow('2nd Half Name:', self.right_name_edit)
 
 
-    def clear(self):
-        """Clears all data from the WorldOptionsEditor"""
+    def clear(self) -> None:
+        """Clear all data from the WorldOptionsEditor"""
         self.world = None
 
         # Disable the boxes
-        self.NumberEdit.setEnabled(False)
-        self.LExistsEdit.setEnabled(False)
-        self.LNameEdit.setEnabled(False)
-        self.RExistsEdit.setEnabled(False)
-        self.RNameEdit.setEnabled(False)
+        self.number_edit.setEnabled(False)
+        self.left_exists_edit.setEnabled(False)
+        self.left_name_edit.setEnabled(False)
+        self.right_exists_edit.setEnabled(False)
+        self.right_name_edit.setEnabled(False)
 
         # Set them all to defaults
-        self.NumberEdit.setValue(0)
-        self.LExistsEdit.setChecked(False)
-        self.LNameEdit.setText('')
-        self.RExistsEdit.setChecked(False)
-        self.RNameEdit.setText('')
+        self.number_edit.setValue(0)
+        self.left_exists_edit.setChecked(False)
+        self.left_name_edit.setText('')
+        self.right_exists_edit.setChecked(False)
+        self.right_name_edit.setText('')
 
-    def setWorld(self, world):
-        """Sets the world to be edited"""
+    def set_world(self, world: WorldInfo) -> None:
+        """Set the world to be edited"""
         self.world = world
 
         # Enable the first box, and potentially others
-        if world.HasL or world.HasR: self.NumberEdit.setEnabled(True)
-        self.LExistsEdit.setEnabled(True)
-        self.LNameEdit.setEnabled(world.HasL)
-        self.RExistsEdit.setEnabled(True)
-        self.RNameEdit.setEnabled(world.HasR)
+        if world.has_left or world.has_right:
+            self.number_edit.setEnabled(True)
+        self.left_exists_edit.setEnabled(True)
+        self.left_name_edit.setEnabled(world.has_left)
+        self.right_exists_edit.setEnabled(True)
+        self.right_name_edit.setEnabled(world.has_right)
 
         # Set them to the correct values
-        if world.HasL or world.HasR: self.NumberEdit.setValue(world.WorldNumber)
-        self.LExistsEdit.setChecked(world.HasL)
-        if world.HasL: self.LNameEdit.setText(world.LName)
-        self.RExistsEdit.setChecked(world.HasR)
-        if world.HasR: self.RNameEdit.setText(world.RName)
+        if world.has_left or world.has_right:
+            self.number_edit.setValue(world.world_number)
+        self.left_exists_edit.setChecked(world.has_left)
+        if world.has_left:
+            self.left_name_edit.setText(world.name_left)
+        self.right_exists_edit.setChecked(world.has_right)
+        if world.has_right:
+            self.right_name_edit.setText(world.name_right)
 
-    def HandleNumberChange(self):
-        """Handles self.NumberEdit changes"""
-        if self.world == None: return
-        self.world.WorldNumber = self.NumberEdit.value()
-        self.dataChanged.emit()
+    def handle_number_change(self) -> None:
+        """Handle self.number_edit changes"""
+        if self.world is None: return
+        self.world.world_number = self.number_edit.value()
+        self.data_changed.emit()
 
-    def HandleLExistsChange(self):
-        """Handles self.LExistsEdit changes"""
-        if self.world == None: return
-        self.world.HasL = self.LExistsEdit.isChecked()
-        self.LNameEdit.setEnabled(self.world.HasL)
-        if not self.world.HasL: self.LNameEdit.setText('')
-        self.NumberEdit.setEnabled(self.world.HasL or self.world.HasR)
-        if (not self.world.HasL) and (not self.world.HasR):
-            self.world.WorldNumber = None
-            self.NumberEdit.setValue(0)
-        elif self.world.WorldNumber == None:
-            self.world.WorldNumber = 0
-            self.NumberEdit.setValue(0)
-        self.dataChanged.emit()
+    def handle_left_exists_change(self) -> None:
+        """Handle self.left_exists_edit changes"""
+        if self.world is None: return
+        self.world.has_left = self.left_exists_edit.isChecked()
+        self.left_name_edit.setEnabled(self.world.has_left)
+        if not self.world.has_left:
+            self.left_name_edit.setText('')
+        self.number_edit.setEnabled(self.world.has_left or self.world.has_right)
+        if (not self.world.has_left) and (not self.world.has_right):
+            self.world.world_number = None
+            self.number_edit.setValue(0)
+        elif self.world.world_number is None:
+            self.world.world_number = 0
+            self.number_edit.setValue(0)
+        self.data_changed.emit()
 
-    def HandleLNameChange(self):
-        """Handles self.LNameEdit changes"""
-        if self.world == None: return
-        self.world.LName = str(self.LNameEdit.text())
-        self.dataChanged.emit()
+    def handle_left_name_change(self) -> None:
+        """Handle self.left_name_edit changes"""
+        if self.world is None: return
+        self.world.name_left = str(self.left_name_edit.text())
+        self.data_changed.emit()
 
-    def HandleRExistsChange(self):
-        """Handles self.RExistsEdit changes"""
-        if self.world == None: return
-        self.world.HasR = self.RExistsEdit.isChecked()
-        self.RNameEdit.setEnabled(self.world.HasR)
-        if not self.world.HasR: self.RNameEdit.setText('')
-        self.NumberEdit.setEnabled(self.world.HasL or self.world.HasR)
-        if (not self.world.HasL) and (not self.world.HasR):
-            self.world.WorldNumber = None
-            self.NumberEdit.setValue(0)
-        elif self.world.WorldNumber == None:
-            self.world.WorldNumber = 0
-            self.NumberEdit.setValue(0)
-        self.dataChanged.emit()
+    def handle_right_exists_change(self) -> None:
+        """Handle self.right_exists_edit changes"""
+        if self.world is None: return
+        self.world.has_right = self.right_exists_edit.isChecked()
+        self.right_name_edit.setEnabled(self.world.has_right)
+        if not self.world.has_right: self.right_name_edit.setText('')
+        self.number_edit.setEnabled(self.world.has_left or self.world.has_right)
+        if (not self.world.has_left) and (not self.world.has_right):
+            self.world.world_number = None
+            self.number_edit.setValue(0)
+        elif self.world.world_number is None:
+            self.world.world_number = 0
+            self.number_edit.setValue(0)
+        self.data_changed.emit()
 
-    def HandleRNameChange(self):
-        """Handles self.RNameEdit changes"""
-        if self.world == None: return
-        self.world.RName = str(self.RNameEdit.text())
-        self.dataChanged.emit()
+    def handle_right_name_change(self) -> None:
+        """Handle self.right_name_edit changes"""
+        if self.world is None: return
+        self.world.name_right = str(self.right_name_edit.text())
+        self.data_changed.emit()
 
 
 
@@ -773,234 +706,238 @@ class WorldOptionsEditor(QtWidgets.QWidget):
 
 class LevelEditor(QtWidgets.QGroupBox):
     """Widget that allows the user to change level settings"""
-    dataChanged = QtCore.pyqtSignal()
-    navRequest = QtCore.pyqtSignal(bool, QtWidgets.QWidget)
+    data_changed = QtCore.pyqtSignal()
+    nav_request = QtCore.pyqtSignal(bool, QtWidgets.QWidget)
+
     def __init__(self):
-        """Initializes the LevelEditor"""
-        QtWidgets.QGroupBox.__init__(self)
+        super().__init__()
         self.setTitle('Level')
         self.level = None
 
         # Create the data-editing widgets
-        self.NameEdit = QtWidgets.QLineEdit()
-        self.NameEdit.setMaxLength(255)
-        self.FileEdit = LevelNameEdit()
-        self.FileEdit.setMinToOne()
-        self.DisplayEdit = LevelNameEdit()
-        self.IsLevelEdit = QtWidgets.QCheckBox()
-        self.NormalExitEdit = QtWidgets.QCheckBox()
-        self.SecretExitEdit = QtWidgets.QCheckBox()
-        self.HalfEdit = QtWidgets.QComboBox()
-        self.HalfEdit.addItems(['1st Half', '2nd Half'])
+        self.name_edit = QtWidgets.QLineEdit()
+        self.name_edit.setMaxLength(255)
+        self.file_edit = LevelNameEdit()
+        self.file_edit.set_minimums(1, 1)
+        self.display_edit = LevelNameEdit()
+        self.in_star_coins_menu_edit = QtWidgets.QCheckBox()
+        self.has_normal_exit_edit = QtWidgets.QCheckBox()
+        self.has_secret_exit_edit = QtWidgets.QCheckBox()
+        self.world_half_edit = QtWidgets.QComboBox()
+        self.world_half_edit.addItems(['1st Half', '2nd Half'])
 
         # Add some tooltips
-        self.NameEdit.setToolTip('<b>Name:</b><br>Changes the level\'s name.')
-        self.FileEdit.setToolTip('<b>Filename:</b><br>Changes the name of the file the level will load from (.arc is automatically added).')
-        self.DisplayEdit.setToolTip('<b>Display Name:</b><br>Changes the on-screen name of this level.<br><br><b>Note:</b><br>Special characters are often used here - symbols such as Castle, Tower, Boo House and Toad House. Each can be used by picking a specific number. Look at Newer SMBW\'s original LevelInfo.bin to find some!')
-        self.IsLevelEdit.setToolTip('<b>Star Coins Menu:</b><br>If this is checked, the level will appear in the Star Coins Menu.')
-        self.NormalExitEdit.setToolTip('<b>Normal Exit:</b><br>If this is checked, the level will have a normal exit.')
-        self.SecretExitEdit.setToolTip('<b>Secret Exit:</b><br>If this is checked, the level will have a secret exit.')
-        self.HalfEdit.setToolTip('<b>World Half:</b><br>This changes which side of the Star Coins menu the level appears on.')
+        self.name_edit.setToolTip("<b>Name:</b><br>Changes the level's name.")
+        self.file_edit.setToolTip('<b>Filename:</b><br>Changes the name of the file the level will load from (.arc is automatically added).')
+        self.display_edit.setToolTip("<b>Display Name:</b><br>Changes the on-screen name of this level.<br><br><b>Note:</b><br>Special characters are often used here - symbols such as Castle, Tower, Boo House and Toad House. Each can be used by picking a specific number. Look at Newer SMBW's original LevelInfo.bin to find some!")
+        self.in_star_coins_menu_edit.setToolTip('<b>Star Coins Menu:</b><br>If this is checked, the level will appear in the Star Coins Menu.')
+        self.has_normal_exit_edit.setToolTip('<b>Normal Exit:</b><br>If this is checked, the level will have a normal exit.')
+        self.has_secret_exit_edit.setToolTip('<b>Secret Exit:</b><br>If this is checked, the level will have a secret exit.')
+        self.world_half_edit.setToolTip('<b>World Half:</b><br>This changes which side of the Star Coins menu the level appears on.')
 
         # Disable them
-        self.NameEdit.setEnabled(False)
-        self.FileEdit.setEnabled(False)
-        self.DisplayEdit.setEnabled(False)
-        self.IsLevelEdit.setEnabled(False)
-        self.NormalExitEdit.setEnabled(False)
-        self.SecretExitEdit.setEnabled(False)
-        self.HalfEdit.setEnabled(False)
+        self.name_edit.setEnabled(False)
+        self.file_edit.setEnabled(False)
+        self.display_edit.setEnabled(False)
+        self.in_star_coins_menu_edit.setEnabled(False)
+        self.has_normal_exit_edit.setEnabled(False)
+        self.has_secret_exit_edit.setEnabled(False)
+        self.world_half_edit.setEnabled(False)
 
         # Connect them to handlers
-        self.NameEdit.textEdited.connect(self.HandleNameChange)
-        self.FileEdit.dataChanged.connect(self.HandleFileChange)
-        self.DisplayEdit.dataChanged.connect(self.HandleDisplayChange)
-        self.IsLevelEdit.stateChanged.connect(self.HandleIsLevelChange)
-        self.NormalExitEdit.stateChanged.connect(self.HandleNormalExitChange)
-        self.SecretExitEdit.stateChanged.connect(self.HandleSecretExitChange)
-        self.HalfEdit.currentIndexChanged.connect(self.HandleHalfChange)
+        self.name_edit.textEdited.connect(self.handle_name_change)
+        self.file_edit.data_changed.connect(self.handle_file_change)
+        self.display_edit.data_changed.connect(self.handle_display_change)
+        self.in_star_coins_menu_edit.stateChanged.connect(self.handle_star_coins_menu_change)
+        self.has_normal_exit_edit.stateChanged.connect(self.handle_has_normal_exit_change)
+        self.has_secret_exit_edit.stateChanged.connect(self.handle_has_secret_exit_change)
+        self.world_half_edit.currentIndexChanged.connect(self.handle_world_half_change)
 
         # Create a layout
-        L = QtWidgets.QFormLayout()
-        L.addRow('Name:', self.NameEdit)
-        L.addRow('Filename:', self.FileEdit)
-        L.addRow('Display Name:', self.DisplayEdit)
-        L.addRow('Normal Exit:', self.NormalExitEdit)
-        L.addRow('Secret Exit:', self.SecretExitEdit)
-        L.addRow('Star Coins Menu:', self.IsLevelEdit)
-        L.addRow('World Half:', self.HalfEdit)
-        self.setLayout(L)
+        L = QtWidgets.QFormLayout(self)
+        L.addRow('Name:', self.name_edit)
+        L.addRow('Filename:', self.file_edit)
+        L.addRow('Display Name:', self.display_edit)
+        L.addRow('Normal Exit:', self.has_normal_exit_edit)
+        L.addRow('Secret Exit:', self.has_secret_exit_edit)
+        L.addRow('Star Coins Menu:', self.in_star_coins_menu_edit)
+        L.addRow('World Half:', self.world_half_edit)
 
         # Watch for PageUp/PageDown
-        for leafWidget in [self.NameEdit,
-                           self.FileEdit.WEdit,
-                           self.FileEdit.LEdit,
-                           self.DisplayEdit.WEdit,
-                           self.DisplayEdit.LEdit,
-                           self.NormalExitEdit,
-                           self.SecretExitEdit,
-                           self.IsLevelEdit,
-                           self.HalfEdit]:
-            leafWidget.installEventFilter(self)
+        for leaf_widget in [self.name_edit,
+                            self.file_edit.world_num_edit,
+                            self.file_edit.level_num_edit,
+                            self.display_edit.world_num_edit,
+                            self.display_edit.level_num_edit,
+                            self.has_normal_exit_edit,
+                            self.has_secret_exit_edit,
+                            self.in_star_coins_menu_edit,
+                            self.world_half_edit]:
+            leaf_widget.installEventFilter(self)
 
 
-    def eventFilter(self, obj, event):
+    def eventFilter(self, obj: QtCore.QObject, event: QtCore.QEvent) -> bool:
         """Filter events for leaf widgets, looking for PageUp/PageDown"""
         # Changing the selected level causes the field edit widget to
         # lose focus, so we pass it in the signal and ask that the
         # handler function please refocus it after switching levels.
         if event.type() == QtCore.QEvent.Type.KeyPress:
             if event.key() == QtCore.Qt.Key.Key_PageUp:
-                self.navRequest.emit(True, obj)
+                self.nav_request.emit(True, obj)
                 return True
             elif event.key() == QtCore.Qt.Key.Key_PageDown:
-                self.navRequest.emit(False, obj)
+                self.nav_request.emit(False, obj)
                 return True
 
-        return super(QtWidgets.QGroupBox, self).eventFilter(obj, event)
+        return super().eventFilter(obj, event)
 
-    def clear(self):
-        """Clears all data from the LevelEditor"""
+    def clear(self) -> None:
+        """Clear all data from the LevelEditor"""
         self.level = None
         self.setTitle('Level')
 
         # Disable all of the data-editing widgets
-        self.NameEdit.setEnabled(False)
-        self.FileEdit.setEnabled(False)
-        self.DisplayEdit.setEnabled(False)
-        self.IsLevelEdit.setEnabled(False)
-        self.NormalExitEdit.setEnabled(False)
-        self.SecretExitEdit.setEnabled(False)
-        self.HalfEdit.setEnabled(False)
+        self.name_edit.setEnabled(False)
+        self.file_edit.setEnabled(False)
+        self.display_edit.setEnabled(False)
+        self.in_star_coins_menu_edit.setEnabled(False)
+        self.has_normal_exit_edit.setEnabled(False)
+        self.has_secret_exit_edit.setEnabled(False)
+        self.world_half_edit.setEnabled(False)
 
         # Set them all to '', 0, and False
-        self.NameEdit.setText('')
-        self.FileEdit.reset()
-        self.DisplayEdit.reset()
-        self.IsLevelEdit.setChecked(False)
-        self.NormalExitEdit.setChecked(False)
-        self.SecretExitEdit.setChecked(False)
-        self.HalfEdit.setCurrentIndex(0)
+        self.name_edit.setText('')
+        self.file_edit.reset()
+        self.display_edit.reset()
+        self.in_star_coins_menu_edit.setChecked(False)
+        self.has_normal_exit_edit.setChecked(False)
+        self.has_secret_exit_edit.setChecked(False)
+        self.world_half_edit.setCurrentIndex(0)
 
-    def setLevel(self, level):
-        """Sets the level to be edited"""
+    def setLevel(self, level: LevelInfo) -> None:
+        """Set the level to be edited"""
         self.level = level
         self.setTitle(self.level.name)
 
         # Enable all of the data-editing widgets
-        self.NameEdit.setEnabled(True)
-        self.FileEdit.setEnabled(True)
-        self.DisplayEdit.setEnabled(True)
-        self.IsLevelEdit.setEnabled(True)
-        self.NormalExitEdit.setEnabled(True)
-        self.SecretExitEdit.setEnabled(True)
-        self.HalfEdit.setEnabled(True)
+        self.name_edit.setEnabled(True)
+        self.file_edit.setEnabled(True)
+        self.display_edit.setEnabled(True)
+        self.in_star_coins_menu_edit.setEnabled(True)
+        self.has_normal_exit_edit.setEnabled(True)
+        self.has_secret_exit_edit.setEnabled(True)
+        self.world_half_edit.setEnabled(True)
 
         # Set them to the correct values
-        self.NameEdit.setText(level.name)
-        self.FileEdit.setData(level.FileW, level.FileL)
-        self.DisplayEdit.setData(level.DisplayW, level.DisplayL)
-        self.IsLevelEdit.setChecked(level.IsLevel)
-        self.NormalExitEdit.setChecked(level.NormalExit)
-        self.SecretExitEdit.setChecked(level.SecretExit)
-        self.HalfEdit.setCurrentIndex(1 if level.RightSide else 0)
+        self.name_edit.setText(level.name)
+        self.file_edit.set_data(level.file_world, level.file_level)
+        self.display_edit.set_data(level.display_world, level.display_level)
+        self.in_star_coins_menu_edit.setChecked(level.in_star_coins_menu)
+        self.has_normal_exit_edit.setChecked(level.has_normal_exit)
+        self.has_secret_exit_edit.setChecked(level.has_secret_exit)
+        self.world_half_edit.setCurrentIndex(1 if level.is_right_side else 0)
 
-    def HandleNameChange(self):
-        """Handles self.NameEdit changes"""
-        if self.level == None: return
-        self.level.name = str(self.NameEdit.text())
-        self.dataChanged.emit()
+    def handle_name_change(self) -> None:
+        """Handle self.name_edit changes"""
+        if self.level is None: return
+        self.level.name = str(self.name_edit.text())
+        self.data_changed.emit()
         self.setTitle('Level - ' + self.level.name)
 
-    def HandleFileChange(self):
-        """Handles self.FileEdit changes"""
-        if self.level == None: return
-        self.level.FileW = self.FileEdit.world()
-        self.level.FileL = self.FileEdit.level()
-        self.dataChanged.emit()
+    def handle_file_change(self) -> None:
+        """Handle self.file_edit changes"""
+        if self.level is None: return
+        self.level.file_world = self.file_edit.get_world()
+        self.level.file_level = self.file_edit.get_level()
+        self.data_changed.emit()
 
-    def HandleDisplayChange(self):
-        """Handles self.DisplayEdit changes"""
-        if self.level == None: return
-        self.level.DisplayW = self.DisplayEdit.world()
-        self.level.DisplayL = self.DisplayEdit.level()
-        self.dataChanged.emit()
+    def handle_display_change(self) -> None:
+        """Handle self.display_edit changes"""
+        if self.level is None: return
+        self.level.display_world = self.display_edit.get_world()
+        self.level.display_level = self.display_edit.get_level()
+        self.data_changed.emit()
 
-    def HandleIsLevelChange(self):
-        """Handles self.IsLevelEdit changes"""
-        if self.level == None: return
-        self.level.IsLevel = self.IsLevelEdit.isChecked()
-        self.dataChanged.emit()
+    def handle_star_coins_menu_change(self) -> None:
+        """Handle self.in_star_coins_menu_edit changes"""
+        if self.level is None: return
+        self.level.in_star_coins_menu = self.in_star_coins_menu_edit.isChecked()
+        self.data_changed.emit()
 
-    def HandleNormalExitChange(self):
-        """Handles self.NormalExitEdit changes"""
-        if self.level == None: return
-        self.level.NormalExit = self.NormalExitEdit.isChecked()
-        self.dataChanged.emit()
+    def handle_has_normal_exit_change(self) -> None:
+        """Handle self.has_normal_exit_edit changes"""
+        if self.level is None: return
+        self.level.has_normal_exit = self.has_normal_exit_edit.isChecked()
+        self.data_changed.emit()
 
-    def HandleSecretExitChange(self):
-        """Handles self.SecretExitEdit changes"""
-        if self.level == None: return
-        self.level.SecretExit = self.SecretExitEdit.isChecked()
-        self.dataChanged.emit()
+    def handle_has_secret_exit_change(self) -> None:
+        """Handle self.has_secret_exit_edit changes"""
+        if self.level is None: return
+        self.level.has_secret_exit = self.has_secret_exit_edit.isChecked()
+        self.data_changed.emit()
 
-    def HandleHalfChange(self):
-        """Handles self.HalfEdit changes"""
-        if self.level == None: return
-        self.level.RightSide = (self.HalfEdit.currentIndex() == 1)
-        self.dataChanged.emit()
+    def handle_world_half_change(self) -> None:
+        """Handle self.world_half_edit changes"""
+        if self.level is None: return
+        self.level.is_right_side = (self.world_half_edit.currentIndex() == 1)
+        self.data_changed.emit()
 
 
 
 class LevelNameEdit(QtWidgets.QWidget):
     """Widget that allows a level name to be edited"""
-    dataChanged = QtCore.pyqtSignal()
+    data_changed = QtCore.pyqtSignal()
+
     def __init__(self):
-        """Initialises the LevelNameEdit"""
-        QtWidgets.QWidget.__init__(self)
+        super().__init__()
 
-        self.WEdit = QtWidgets.QSpinBox()
-        self.WEdit.setMaximum(255)
-        Label = QtWidgets.QLabel('-')
-        Label.setMaximumWidth(Label.minimumSizeHint().width())
-        self.LEdit = QtWidgets.QSpinBox()
-        self.LEdit.setMaximum(255)
+        self.world_num_edit = QtWidgets.QSpinBox()
+        self.world_num_edit.setMaximum(255)
+        dash_label = QtWidgets.QLabel('-')
+        dash_label.setMaximumWidth(dash_label.minimumSizeHint().width())
+        self.level_num_edit = QtWidgets.QSpinBox()
+        self.level_num_edit.setMaximum(255)
 
-        self.WEdit.valueChanged.connect(self.emitDataChange)
-        self.LEdit.valueChanged.connect(self.emitDataChange)
+        self.world_num_edit.valueChanged.connect(self.emit_data_change)
+        self.level_num_edit.valueChanged.connect(self.emit_data_change)
 
-        L = QtWidgets.QHBoxLayout()
+        L = QtWidgets.QHBoxLayout(self)
         L.setContentsMargins(0, 0, 0, 0)
-        L.addWidget(self.WEdit)
-        L.addWidget(Label)
-        L.addWidget(self.LEdit)
-        self.setLayout(L)
+        L.addWidget(self.world_num_edit)
+        L.addWidget(dash_label)
+        L.addWidget(self.level_num_edit)
 
-    def setData(self, w, L):
-        """Sets the world and level values"""
-        self.WEdit.setValue(w)
-        self.LEdit.setValue(L)
-    def world(self):
-        """Returns the world value"""
-        return self.WEdit.value()
-    def level(self):
-        """Returns the level value"""
-        return self.LEdit.value()
-    def setEnabled(self, enabled):
-        """Enables or disables the widget"""
-        self.WEdit.setEnabled(enabled)
-        self.LEdit.setEnabled(enabled)
-    def reset(self):
-        """Resets the widget"""
-        self.WEdit.setValue(0)
-        self.LEdit.setValue(0)
-    def emitDataChange(self):
-        """Emits the dataChange signal"""
-        self.dataChanged.emit()
-    def setMinToOne(self):
-        """Sets the minimum for each spinbox to 1"""
-        self.WEdit.setMinimum(1)
-        self.LEdit.setMinimum(1)
+    def set_data(self, world_num: int, level_num: int) -> None:
+        """Set the world and level values"""
+        self.world_num_edit.setValue(world_num)
+        self.level_num_edit.setValue(level_num)
+
+    def get_world(self) -> int:
+        """Return the world value"""
+        return self.world_num_edit.value()
+
+    def get_level(self) -> int:
+        """Return the level value"""
+        return self.level_num_edit.value()
+
+    def setEnabled(self, enabled: bool) -> None:
+        """Enable or disable the widget"""
+        self.world_num_edit.setEnabled(enabled)
+        self.level_num_edit.setEnabled(enabled)
+
+    def reset(self) -> None:
+        """Reset the widget"""
+        self.world_num_edit.setValue(0)
+        self.level_num_edit.setValue(0)
+
+    def emit_data_change(self) -> None:
+        """Emit the data_changed signal"""
+        self.data_changed.emit()
+
+    def set_minimums(self, world_minimum: int, level_minimum: int) -> None:
+        """Set the minimum for each spinbox"""
+        self.world_num_edit.setMinimum(world_minimum)
+        self.level_num_edit.setMinimum(level_minimum)
 
 
 
@@ -1014,125 +951,118 @@ class LevelNameEdit(QtWidgets.QWidget):
 class MainWindow(QtWidgets.QMainWindow):
     """Main window"""
     def __init__(self):
-        """Initialises the window"""
-        QtWidgets.QMainWindow.__init__(self)
-        self.fp = None # file path
+        super().__init__()
+        self.file_path = None
 
-        # Create the viewer
         self.view = LevelInfoViewer()
         self.setCentralWidget(self.view)
 
-        # Create the menubar and a few actions
-        self.CreateMenubar()
+        self.create_menu_bar()
 
-        # Set window title and show the window
         self.setWindowTitle('Level Info Editor')
         self.show()
 
-    def CreateMenubar(self):
-        """Sets up the menubar"""
+    def create_menu_bar(self) -> None:
+        """Set up the menu bar"""
         m = self.menuBar()
 
-        # File Menu
+        # File menu
         f = m.addMenu('&File')
 
-        openAct = f.addAction('Open File...')
-        openAct.setShortcut('Ctrl+O') 
-        openAct.triggered.connect(self.HandleOpen)
+        open_action = f.addAction('Open File...')
+        open_action.setShortcut('Ctrl+O') 
+        open_action.triggered.connect(self.handle_open)
 
-        self.saveAct = f.addAction('Save File')
-        self.saveAct.setShortcut('Ctrl+S')
-        self.saveAct.triggered.connect(self.HandleSave)
-        self.saveAct.setEnabled(False)
+        self.save_action = f.addAction('Save File')
+        self.save_action.setShortcut('Ctrl+S')
+        self.save_action.triggered.connect(self.handle_save)
+        self.save_action.setEnabled(False)
 
-        saveAsAct = f.addAction('Save File As...')
-        saveAsAct.setShortcut('Ctrl+Shift+S')
-        saveAsAct.triggered.connect(self.HandleSaveAs)
+        save_as_action = f.addAction('Save File As...')
+        save_as_action.setShortcut('Ctrl+Shift+S')
+        save_as_action.triggered.connect(self.handle_save_as)
 
         f.addSeparator()
 
-        exitAct = f.addAction('Exit')
-        exitAct.setShortcut('Ctrl+Q')
-        exitAct.triggered.connect(self.HandleExit)
+        exit_action = f.addAction('Exit')
+        exit_action.setShortcut('Ctrl+Q')
+        exit_action.triggered.connect(self.handle_exit)
 
-        # Help Menu
+        # Help menu
         h = m.addMenu('&Help')
 
-        aboutAct = h.addAction('About...')
-        aboutAct.setShortcut('Ctrl+H')
-        aboutAct.triggered.connect(self.HandleAbout)
+        about_action = h.addAction('About...')
+        about_action.setShortcut('Ctrl+H')
+        about_action.triggered.connect(self.handle_about)
 
 
-    def HandleOpen(self):
-        """Handles file opening"""
+    def handle_open(self) -> None:
+        """Handle file opening"""
         fp = QtWidgets.QFileDialog.getOpenFileName(self, 'Open File', '', 'Binary Files (*.bin);;All Files (*)')[0]
         if fp == '': return
-        self.fp = fp
+        self.file_path = fp
 
-        # Open the file
-        file = open(fp, 'rb')
-        data = file.read()
-        file.close()
-        LevelInfo = LevelInfoFile(data)
+        with open(fp, 'rb') as f:
+            data = f.read()
 
-        # Update the viewer with this data
-        self.view.setFile(LevelInfo)
+        LevelInfo = LevelInfoFile.from_data(data)
+        if LevelInfo is None:
+            return
 
-        # Enable saving
-        self.saveAct.setEnabled(True)
+        self.view.set_file(LevelInfo)
 
-    def HandleSave(self):
-        """Handles file saving"""
-        data = self.view.saveFile()
+        self.save_action.setEnabled(True)
 
-        # Open the file
-        file = open(self.fp, 'wb')
-        file.write(data)
-        file.close()
+    def handle_save(self) -> None:
+        """Handle file saving"""
+        data = self.view.save_file()
 
-    def HandleSaveAs(self):
-        """Handles saving to a new file"""
+        with open(self.file_path, 'wb') as f:
+            f.write(data)
+
+    def handle_save_as(self) -> None:
+        """Handle saving to a new file"""
         fp = QtWidgets.QFileDialog.getSaveFileName(self, 'Save File', '', 'Binary Files (*.bin);;All Files (*)')[0]
         if fp == '': return
-        self.fp = fp
+        self.file_path = fp
 
-        # Save it
-        self.HandleSave()
+        self.handle_save()
 
-        # Enable saving
-        self.saveAct.setEnabled(True)
+        self.save_action.setEnabled(True)
 
-    def HandleExit(self):
-        """Exits"""
-        raise SystemExit
+    def handle_exit(self) -> None:
+        """Exit"""
+        self.close()
 
-    def HandleAbout(self):
-        """Shows the About dialog"""
-        try: readme = open('readme.md', 'r').read()
-        except: readme = 'Level Info Editor %s by RoadrunnerWMC\n(No readme.md found!)\nLicensed under GPL 3' % VERSION
+    def handle_about(self) -> None:
+        """Show the About dialog"""
+        try:
+            with open('readme.md', 'r', encoding='utf-8') as f:
+                readme = f.read()
+        except Exception:
+            readme = 'Level Info Editor {VERSION} by RoadrunnerWMC\n(No readme.md found!)\nLicensed under GPL 3'
 
-        txtedit = QtWidgets.QPlainTextEdit(readme)
-        txtedit.setReadOnly(True)
+        text_edit = QtWidgets.QPlainTextEdit(readme)
+        text_edit.setReadOnly(True)
 
-        buttonBox = QtWidgets.QDialogButtonBox(QtWidgets.QDialogButtonBox.StandardButton.Ok)
+        button_box = QtWidgets.QDialogButtonBox(QtWidgets.QDialogButtonBox.StandardButton.Ok)
 
         layout = QtWidgets.QVBoxLayout()
-        layout.addWidget(txtedit)
-        layout.addWidget(buttonBox)
+        layout.addWidget(text_edit)
+        layout.addWidget(button_box)
 
         dlg = QtWidgets.QDialog()
         dlg.setLayout(layout)
         dlg.setModal(True)
         dlg.setMinimumWidth(384)
-        buttonBox.accepted.connect(dlg.accept)
+        button_box.accepted.connect(dlg.accept)
         dlg.exec()
 
 
 
-# Main function
 def main():
-    """Main startup function"""
     app = QtWidgets.QApplication(sys.argv)
-    mainWindow = MainWindow()
+    main_window = MainWindow()
     sys.exit(app.exec())
+
 main()
