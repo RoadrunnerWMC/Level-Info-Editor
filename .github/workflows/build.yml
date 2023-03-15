@@ -26,7 +26,7 @@ jobs:
           - build-name: 'Ubuntu'
             python-version: "3.11"
             pyqt-version: 6
-            platform: ubuntu-20.04  # https://github.com/pyinstaller/pyinstaller/issues/7197
+            platform: ubuntu-latest
             arch: 'x64'
 
     name: ${{ matrix.build-name }}
