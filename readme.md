@@ -1,10 +1,4 @@
-# Level Info Editor
-(1.5)
-
-----------------------------------------------------------------
-
-Support:   http://rvlution.net/forums/  
-On GitHub: https://github.com/RoadrunnerWMC/Level-Info-Editor  
+# Level Info Editor 1.6
 
 ----------------------------------------------------------------
 
@@ -16,21 +10,26 @@ Level Info Editor is a program which can edit and save copies of LevelInfo.bin f
 
 ### Getting Started
 
-If you're on Windows and don't care about having the bleeding-edge latest features, you can use the official Windows builds. This is by far the easiest setup method. Just download either a ZIP or 7Z file, unzip it and run the executable.
+If you're using a source release:
 
-If you are not on Windows or you want the very latest features, you'll need to run Level Info Editor from source.
+- Python 3 (3.10 or newer recommended) — https://www.python.org
+- PyQt 6.4 (or newer) (`pip install PyQt6`) **(RECOMMENDED)** or PyQt5 (`pip install PyQt5`)
+
+If you have a prebuilt/frozen release (for Windows, macOS or Ubuntu),
+you don't need to install anything — all the required libraries are included.
 
 
-### How to Run Level Info Editor from Source
+### macOS Troubleshooting
 
-Download and install the following:
- * Python 3.4 (or newer) - http://www.python.org
- * PyQt 5.3 (or newer) - http://www.riverbankcomputing.co.uk/software/pyqt/intro
- * cx_Freeze 4.3 (or newer) (optional) - http://cx-freeze.sourceforge.net
+If you get the error "Level Info Editor is damaged and can't be opened.",
+it's because the release builds are unsigned. To fix it, launch a Terminal
+window and run
 
-Run the following in a command prompt:  
-`python3 level_info_editor.py`  
-You can replace `python3` with the path to python.exe (including "python.exe" at the end) and `level_info_editor.py` with the path to level_info_editor.py (including "level_info_editor.py" at the end)
+    sudo xattr -rd com.apple.quarantine "/path/to/Level Info Editor.app"
+
+...with the example path above replaced with the actual path to the app. This
+will override the application signature requirement, which should allow you to
+launch the app.
 
 
 ### Level Info Editor Team
@@ -38,12 +37,12 @@ You can replace `python3` with the path to python.exe (including "python.exe" at
 Developers:
  * RoadrunnerWMC - Developer
 
+
 ### Dependencies/Libraries/Resources
 
-Python 3 - Python Software Foundation (https://www.python.org)  
-Qt 5 - Nokia (http://qt.nokia.com)  
-PyQt5 - Riverbank Computing (http://www.riverbankcomputing.co.uk/software/pyqt/intro)  
-cx_Freeze - Anthony Tuininga (http://cx-freeze.sourceforge.net)
+- Python 3 — The Python Software Foundation (https://www.python.org)
+- Qt — The Qt Company (https://www.qt.io)
+- PyQt — Riverbank Computing (https://riverbankcomputing.com/software/pyqt/intro)
 
 
 ### License
@@ -55,7 +54,13 @@ See the license file in the distribution for information.
 
 ## Changelog
 
-Release 1.5: (January 10, 2021)
+Release 1.6 (March 15, 2023)
+ * Added support for PyQt6. PyQt5 is also still supported.
+ * The world list now shows world names in addition to world numbers
+ * Broadly cleaned up the code (I'm much better at programming now, 10 years after I originally developed this)
+   * The code for loading and saving files was almost completely rewritten. A few bugs were fixed during that process.
+
+Release 1.5 (January 10, 2021)
  * Fixed issues with modern PyQt versions
  * Started providing builds for 64-bit Windows, Linux, and macOS
 
