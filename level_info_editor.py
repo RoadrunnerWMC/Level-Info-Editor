@@ -203,14 +203,14 @@ class LevelInfoFile():
             world_data.extend(struct.pack('>I', num))
 
             # Add data to world_data for each world half
-            for exists, name in zip((world.has_left, world.has_right), ('L', 'R')):
+            for exists, name in zip((world.has_left, world.has_right), ('left', 'right')):
                 if not exists: continue
-                w_name = getattr(world, f'{name}Name')
+                w_name = getattr(world, f'name_{name}')
                 world_data.extend(LEVEL_ENTRY_STRUCT.pack(
                     98, 98,  # filename: 98-98
-                    world.world_number, (101 if name == 'R' else 100),  # display name: WN-100
+                    world.world_number, (101 if name == 'right' else 100),  # display name: WN-100
                     len(w_name),
-                    (0x400 if name == 'R' else 0),
+                    (0x400 if name == 'right' else 0),
                     current_text_offs))
 
                 current_text_offs += len(w_name) + 1
