@@ -1,4 +1,4 @@
-# Level Info Editor 1.6
+# Level Info Editor 1.7
 
 ----------------------------------------------------------------
 
@@ -53,6 +53,9 @@ See the license file in the distribution for information.
 ----------------------------------------------------------------
 
 ## Changelog
+
+Release 1.7 (June 6, 2023)
+ * Fixed a bug introduced in 1.6 that caused crashes during saving
 
 Release 1.6 (March 15, 2023)
  * Added support for PyQt6. PyQt5 is also still supported.
